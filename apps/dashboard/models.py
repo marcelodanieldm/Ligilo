@@ -64,6 +64,20 @@ class PatrolStatus:
 
 
 @dataclass(frozen=True)
+class PatrolCertificate:
+    patrol_id: int | None
+    title: str
+    patrol_name: str
+    event_name: str
+    achievement: str
+    issued_on: str
+    scout_count: str
+    verification_code: str
+    share_target_email: str
+    accents: list[str]
+
+
+@dataclass(frozen=True)
 class DashboardPageModel:
     lang: str
     leader: LeaderIdentity
@@ -75,3 +89,4 @@ class DashboardPageModel:
     featured_mission: FeaturedMission
     tasks: list[LeaderTask]
     patrols: list[PatrolStatus]
+    certificate: PatrolCertificate

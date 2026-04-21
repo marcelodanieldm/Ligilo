@@ -1,5 +1,8 @@
 from dataclasses import asdict
 
+from django.db.models import Count, Max, Q
+from django.utils import timezone
+
 from apps.dashboard.models import (
     ConnectivityStatus,
     DashboardPageModel,
@@ -9,8 +12,10 @@ from apps.dashboard.models import (
     LeaderTask,
     NavItem,
     PatrolStatus,
+    PatrolCertificate,
     StatCard,
 )
+from apps.scouting.models import Event, Patrol, Submission
 
 
 class LeaderDashboardController:
@@ -33,7 +38,93 @@ class LeaderDashboardController:
         "IT",  # Itala
     ]
 
+    def _build_certificate(self) -> PatrolCertificate:
+        active_event = Event.objects.filter(is_active=True).order_by("-starts_at").first()
+        event = active_event or Event.objects.order_by("-starts_at").first()
+
+        if not event:
+            return PatrolCertificate(
+                patrol_id=None,
+                title="Certificado de patrulla lista",
+                patrol_name="Sin patrulla disponible",
+                event_name="Aun no hay eventos",
+                achievement="Carga tu primer evento y submissions para habilitar certificados operativos.",
+                issued_on=timezone.localdate().strftime("%d/%m/%Y"),
+                scout_count="0 scouts",
+                verification_code="LGL-PENDING-000",
+                share_target_email="",
+                accents=["Esperando datos reales", "Sin submissions registradas", "Estado: inicial"],
+            )
+
+        patrol = (
+            Patrol.objects.filter(event=event, is_active=True)
+            .annotate(
+                submission_count=Count("submissions"),
+                reviewed_count=Count(
+                    "submissions",
+                    filter=Q(submissions__status=Submission.Status.REVIEWED),
+                ),
+                last_submission_at=Max("submissions__submitted_at"),
+            )
+            .order_by("-reviewed_count", "-submission_count", "delegation_name", "name")
+            .first()
+        )
+
+        if not patrol:
+            return PatrolCertificate(
+                patrol_id=None,
+                title="Certificado de patrulla lista",
+                patrol_name="Sin patrulla activa",
+                event_name=event.name,
+                achievement="El evento existe, pero todavia no hay patrullas activas para certificar.",
+                issued_on=timezone.localdate().strftime("%d/%m/%Y"),
+                scout_count="0 scouts",
+                verification_code=f"LGL-{event.id:03d}-NOPATROL",
+                share_target_email="",
+                accents=["Evento preparado", "Sin patrullas activas", "Estado: pendiente"],
+            )
+
+        latest_submission = (
+            Submission.objects.filter(patrol=patrol)
+            .select_related("mission")
+            .order_by("-submitted_at")
+            .first()
+        )
+
+        submission_count = Submission.objects.filter(patrol=patrol).count()
+        reviewed_count = Submission.objects.filter(
+            patrol=patrol,
+            status=Submission.Status.REVIEWED,
+        ).count()
+
+        mission_note = "Sin mision enviada aun"
+        if latest_submission:
+            mission_note = f"Ultima mision: {latest_submission.mission.title}"
+
+        return PatrolCertificate(
+            patrol_id=patrol.id,
+            title="Certificado de patrulla lista",
+            patrol_name=patrol.name,
+            event_name=event.name,
+            achievement=(
+                f"Delegacion {patrol.delegation_name}. "
+                f"Submissions revisadas: {reviewed_count}/{submission_count}."
+            ),
+            issued_on=timezone.localdate().strftime("%d/%m/%Y"),
+            scout_count=f"{patrol.member_count} scouts",
+            verification_code=(
+                f"LGL-{event.id:03d}-{patrol.id:03d}-{timezone.localdate().strftime('%Y%m%d')}"
+            ),
+            share_target_email=patrol.leader_email,
+            accents=[
+                f"Idioma oficial: {patrol.official_language_name}",
+                mission_note,
+                f"Pais: {patrol.country_name}",
+            ],
+        )
+
     def get_context(self) -> dict:
+        certificate = self._build_certificate()
         page_model = DashboardPageModel(
             lang="es",
             leader=LeaderIdentity(initial="L"),
@@ -88,7 +179,7 @@ class LeaderDashboardController:
                     badge="Paso 2",
                     title="Idioma",
                     description=(
-                        "204 eligieron idioma entre 12 opciones con botones grandes, "
+                        "204 eligieron idioma entre 15 opciones con botones grandes, "
                         "etiquetas cortas y scroll ligero."
                     ),
                     value="92%",
@@ -127,7 +218,7 @@ class LeaderDashboardController:
                     title="Revisar scouts sin idioma confirmado",
                     description=(
                         "13 usuarios entraron por enlace compartido y no terminaron la "
-                        "seleccion entre 12 idiomas disponibles."
+                        "seleccion entre 15 idiomas disponibles."
                     ),
                     tag="Prioridad alta",
                     tag_tone="bark",
@@ -166,6 +257,7 @@ class LeaderDashboardController:
                     summary="12 scouts. Activar modo de reintento ligero.",
                 ),
             ],
+            certificate=certificate,
         )
 
         return asdict(page_model)

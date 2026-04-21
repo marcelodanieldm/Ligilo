@@ -1,0 +1,190 @@
+{% extends "admin/base_site.html" %}
+{% load i18n static %}
+
+{% block extrastyle %}
+  {{ block.super }}
+  <style>
+    .analytics-grid {
+      display: grid;
+      gap: 1rem;
+      margin-bottom: 1.25rem;
+      grid-template-columns: 1fr;
+    }
+
+    @media (min-width: 1100px) {
+      .analytics-grid {
+        grid-template-columns: 1.15fr 0.85fr;
+      }
+    }
+
+    .analytics-card {
+      background: #fff;
+      border: 1px solid #d9d9d9;
+      border-radius: 12px;
+      padding: 1rem;
+    }
+
+    .analytics-title {
+      margin: 0 0 0.75rem;
+      color: #1f2937;
+      font-weight: 600;
+      font-size: 1rem;
+    }
+
+    .security-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 0.86rem;
+    }
+
+    .security-table th,
+    .security-table td {
+      border: 1px solid #f1c5c5;
+      padding: 0.5rem;
+      text-align: left;
+      vertical-align: top;
+    }
+
+    .security-table thead th {
+      background: #7f1d1d;
+      color: #fff;
+    }
+
+    .security-table tbody tr {
+      background: #fff5f5;
+    }
+
+    .security-pill {
+      display: inline-block;
+      border-radius: 999px;
+      padding: 0.15rem 0.5rem;
+      font-size: 0.72rem;
+      font-weight: 700;
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+      background: #b91c1c;
+      color: #fff;
+    }
+
+    .empty-note {
+      color: #4b5563;
+      font-size: 0.85rem;
+      margin: 0;
+    }
+  </style>
+{% endblock %}
+
+{% block content %}
+  <div id="content-main">
+    <section class="analytics-grid">
+      <article class="analytics-card">
+        <h2 class="analytics-title">Patrullas Registradas vs. Patrullas con Match</h2>
+        <canvas id="trafficChart" height="120" aria-label="Grafico de patrullas" role="img"></canvas>
+      </article>
+
+      <article class="analytics-card">
+        <h2 class="analytics-title">Alertas de Seguridad IA ({{ scouting_security_alert_total }})</h2>
+        {% if scouting_security_alerts %}
+          <table class="security-table">
+            <thead>
+              <tr>
+                <th>Estado</th>
+                <th>Evento</th>
+                <th>Patrulla</th>
+                <th>Mision</th>
+                <th>Scout</th>
+                <th>Fecha</th>
+                <th>Detalle IA</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for alert in scouting_security_alerts %}
+                <tr>
+                  <td><span class="security-pill">Flagged</span></td>
+                  <td>{{ alert.event_name }}</td>
+                  <td>
+                    <a href="{{ alert.change_url }}">{{ alert.patrol_name }}</a>
+                  </td>
+                  <td>{{ alert.mission_title }}</td>
+                  <td>{{ alert.submitted_by }}</td>
+                  <td>{{ alert.submitted_at }}</td>
+                  <td>{{ alert.reason }}</td>
+                </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        {% else %}
+          <p class="empty-note">No hay submissions marcadas como flagged por IA en este momento.</p>
+        {% endif %}
+      </article>
+    </section>
+
+    {% include "admin/app_list.html" with app_list=app_list show_changelinks=True %}
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js"></script>
+  <script>
+    (function () {
+      const chartElement = document.getElementById("trafficChart");
+      if (!chartElement) {
+        return;
+      }
+
+      fetch("{{ scouting_traffic_chart_url }}", { credentials: "same-origin" })
+        .then((response) => response.json())
+        .then((payload) => {
+          const labels = payload.labels || [];
+          const registered = payload.registered || [];
+          const matched = payload.matched || [];
+
+          new Chart(chartElement, {
+            type: "bar",
+            data: {
+              labels,
+              datasets: [
+                {
+                  label: "Patrullas Registradas",
+                  data: registered,
+                  backgroundColor: "rgba(37, 99, 235, 0.75)",
+                  borderColor: "rgba(37, 99, 235, 1)",
+                  borderWidth: 1,
+                  borderRadius: 8,
+                },
+                {
+                  label: "Patrullas con Match",
+                  data: matched,
+                  backgroundColor: "rgba(16, 185, 129, 0.75)",
+                  borderColor: "rgba(16, 185, 129, 1)",
+                  borderWidth: 1,
+                  borderRadius: 8,
+                },
+              ],
+            },
+            options: {
+              responsive: true,
+              maintainAspectRatio: false,
+              scales: {
+                y: {
+                  beginAtZero: true,
+                  ticks: {
+                    precision: 0,
+                  },
+                },
+              },
+              plugins: {
+                legend: {
+                  position: "top",
+                },
+              },
+            },
+          });
+        })
+        .catch(() => {
+          chartElement.insertAdjacentHTML(
+            "afterend",
+            '<p class="empty-note">No se pudo cargar el grafico de trafico inicial.</p>'
+          );
+        });
+    })();
+  </script>
+{% endblock %}
