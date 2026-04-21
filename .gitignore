@@ -3,24 +3,84 @@ __pycache__/
 *.py[cod]
 *.pyo
 *.pyd
+.Python
 
 # Virtual environments
 .venv/
 venv/
+env/
+ENV/
 
 # Environment files
 .env
 .env.*
 !.env.example
+.python-version
+
+# Secret material and credentials
+*.pem
+*.key
+*.crt
+*.cer
+*.csr
+*.p12
+*.pfx
+*.p8
+*.kdbx
+id_rsa
+id_rsa.pub
+id_ed25519
+id_ed25519.pub
+secrets.*
+secret.*
+credentials.*
+service-account*.json
+
+# Local databases and dumps
+*.db
+*.sqlite3
+*.sqlite
+*.sql
+*.dump
+*.bak
 
 # Build and runtime outputs
 staticfiles/
 outputs/
+media/
 
 # Tooling caches
 .pytest_cache/
 .mypy_cache/
 .ruff_cache/
+.pyre/
+.hypothesis/
+.coverage
+.coverage.*
+coverage/
+htmlcov/
+
+# Logs and local runtime state
+*.log
+*.pid
+*.pid.lock
+
+# Dependency and packaging artifacts
+build/
+dist/
+*.egg-info/
+.eggs/
+pip-wheel-metadata/
+
+# Docker and container overrides
+docker-compose.override.yml
+docker-compose.local.yml
+
+# Editor swap and temp files
+*.tmp
+*.temp
+*.swp
+*.swo
 
 # OS / editor
 .DS_Store
