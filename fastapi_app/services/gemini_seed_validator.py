@@ -1,0 +1,179 @@
+from __future__ import annotations
+
+import json
+import os
+import time
+from typing import Any
+from urllib import error, request
+
+
+API_URL_TEMPLATE = "https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent?key={api_key}"
+DEFAULT_MODEL = "gemini-1.5-flash"
+
+PROMPT_BASE = (
+    "Analiza el siguiente texto en Esperanto para un contexto scout. "
+    "Si el texto es ofensivo o rompe las reglas de 'Safe from Harm', marca flagged: true. "
+    "Si es seguro, evalúa si la estructura es comprensible (incluso con errores de principiante) "
+    "y devuelve un mensaje de aliento en Esperanto"
+)
+
+SYSTEM_PROMPT = (
+    "You are Ligilo Semantic Validator. Return exactly one valid JSON object with these keys only: "
+    "flagged (boolean), comprehensible (boolean), encouragement_message (string, max 240 chars). "
+    "No markdown, no extra keys, no explanations."
+)
+
+
+def _call_gemini(
+    *,
+    api_key: str,
+    model: str,
+    text_input: str,
+    temperature: float,
+    timeout_seconds: int,
+) -> str:
+    payload = {
+        "system_instruction": {"parts": [{"text": SYSTEM_PROMPT}]},
+        "contents": [
+            {
+                "role": "user",
+                "parts": [
+                    {
+                        "text": f"{PROMPT_BASE}\n\nTexto:\n{text_input}",
+                    }
+                ],
+            }
+        ],
+        "generationConfig": {
+            "temperature": temperature,
+            "maxOutputTokens": 240,
+        },
+    }
+
+    req = request.Request(
+        url=API_URL_TEMPLATE.format(model=model, api_key=api_key),
+        data=json.dumps(payload).encode("utf-8"),
+        headers={"Content-Type": "application/json"},
+        method="POST",
+    )
+
+    try:
+        with request.urlopen(req, timeout=timeout_seconds) as resp:
+            raw = resp.read().decode("utf-8")
+    except error.HTTPError as exc:
+        body = exc.read().decode("utf-8", errors="replace")
+        raise RuntimeError(f"Gemini HTTP {exc.code}: {body}") from exc
+    except error.URLError as exc:
+        raise RuntimeError(f"Network error: {exc.reason}") from exc
+
+    parsed = json.loads(raw)
+    candidates = parsed.get("candidates") or []
+    if not candidates:
+        raise RuntimeError(f"No candidates in Gemini response: {raw}")
+
+    parts = ((candidates[0].get("content") or {}).get("parts") or [])
+    if not parts or "text" not in parts[0]:
+        raise RuntimeError(f"No text part in Gemini response: {raw}")
+
+    return parts[0]["text"].strip()
+
+
+def _parse_json_object(raw_text: str) -> tuple[dict[str, Any] | None, str | None]:
+    # Unua provo: rekta JSON-parse.
+    try:
+        parsed = json.loads(raw_text)
+        if isinstance(parsed, dict):
+            return parsed, None
+        return None, "Parsed JSON is not an object"
+    except json.JSONDecodeError:
+        pass
+
+    # Rezerva provo: elpreni la unuan JSON-objekton en la teksto.
+    start = raw_text.find("{")
+    end = raw_text.rfind("}")
+    if start != -1 and end != -1 and end > start:
+        candidate = raw_text[start : end + 1]
+        try:
+            parsed = json.loads(candidate)
+            if isinstance(parsed, dict):
+                return parsed, None
+            return None, "Recovered JSON is not an object"
+        except json.JSONDecodeError as exc:
+            return None, f"JSON decode error: {exc}"
+
+    return None, "No JSON object found"
+
+
+def _validate_schema(obj: dict[str, Any]) -> tuple[bool, str | None]:
+    required_keys = {"flagged", "comprehensible", "encouragement_message"}
+    keys = set(obj.keys())
+
+    missing = required_keys - keys
+    extra = keys - required_keys
+    if missing:
+        return False, f"Missing keys: {sorted(missing)}"
+    if extra:
+        return False, f"Extra keys: {sorted(extra)}"
+
+    if not isinstance(obj.get("flagged"), bool):
+        return False, "flagged must be boolean"
+    if not isinstance(obj.get("comprehensible"), bool):
+        return False, "comprehensible must be boolean"
+
+    encouragement_message = obj.get("encouragement_message")
+    if not isinstance(encouragement_message, str):
+        return False, "encouragement_message must be string"
+    if len(encouragement_message) > 240:
+        return False, "encouragement_message max length is 240"
+
+    return True, None
+
+
+def validate_esperanto_content(
+    text: str,
+    *,
+    api_key: str | None = None,
+    model: str = DEFAULT_MODEL,
+    max_retries: int = 3,
+    temperature: float = 0.2,
+    timeout_seconds: int = 60,
+    initial_backoff_seconds: float = 1.0,
+) -> dict[str, Any]:
+    # Servo por la Semilla-nivela taksado kun revojigo kaj sekura fallback.
+    resolved_api_key = api_key or os.getenv("GEMINI_API_KEY", "")
+    if not resolved_api_key:
+        raise ValueError("Missing Gemini API key. Use api_key or GEMINI_API_KEY.")
+
+    if max_retries < 1:
+        raise ValueError("max_retries must be >= 1")
+
+    for attempt in range(1, max_retries + 1):
+        try:
+            raw_output = _call_gemini(
+                api_key=resolved_api_key,
+                model=model,
+                text_input=text,
+                temperature=temperature,
+                timeout_seconds=timeout_seconds,
+            )
+            parsed, parse_error = _parse_json_object(raw_output)
+            if parse_error:
+                raise RuntimeError(f"Malformed JSON: {parse_error}")
+
+            assert parsed is not None
+            valid, schema_error = _validate_schema(parsed)
+            if not valid:
+                raise RuntimeError(f"Invalid schema: {schema_error}")
+
+            return parsed
+        except RuntimeError:
+            if attempt == max_retries:
+                break
+            backoff = initial_backoff_seconds * (2 ** (attempt - 1))
+            time.sleep(backoff)
+
+    return {
+        "flagged": True,
+        "comprehensible": False,
+        "encouragement_message": "Bonvolu reprovi post momento. Ni estas cxe vi por helpi!",
+    }

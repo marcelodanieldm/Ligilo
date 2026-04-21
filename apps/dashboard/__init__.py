@@ -1,0 +1,1 @@
+"""Aplicacion dashboard de Ligilo."""

@@ -1,0 +1,63 @@
+{% extends 'ligilo/base.html' %}
+
+{% block title %}Ligilo | Dashboard del lider{% endblock %}
+
+{% block body %}
+  <div class="mx-auto flex min-h-screen max-w-[1600px] flex-col lg:flex-row">
+    {% include 'ligilo/includes/leader_sidebar.html' %}
+
+    <main class="flex-1 px-4 py-5 sm:px-6 lg:px-8 lg:py-8">
+      <header class="rounded-[2rem] border border-pine/10 bg-white/80 p-5 shadow-card backdrop-blur">
+        <div class="flex flex-col gap-5 xl:flex-row xl:items-end xl:justify-between">
+          <div>
+            <p class="text-xs uppercase tracking-[0.32em] text-moss">Vista de campamento</p>
+            <h2 class="mt-2 font-scout text-3xl font-semibold text-pine">Dashboard del lider</h2>
+            <p class="mt-3 max-w-2xl text-sm leading-6 text-charcoal/80">{{ hero_copy }}</p>
+          </div>
+          {% include 'ligilo/includes/leader_stats.html' %}
+        </div>
+      </header>
+
+      <section class="mt-4 rope-divider"></section>
+
+      <section class="mt-6 grid gap-6 xl:grid-cols-[1.2fr_0.8fr]">
+        {% include 'ligilo/includes/leader_funnel.html' %}
+
+        <article class="rounded-[2rem] border border-pine/10 bg-white/85 p-5 shadow-card">
+          <div class="flex items-start justify-between gap-4">
+            <div>
+              <p class="text-xs uppercase tracking-[0.28em] text-moss">Mision destacada</p>
+              <h3 class="mt-2 font-scout text-2xl font-semibold text-pine">{{ featured_mission.title }}</h3>
+            </div>
+            <span class="rounded-full bg-moss px-3 py-1 text-xs font-semibold uppercase tracking-[0.24em] text-white">{{ featured_mission.status }}</span>
+          </div>
+
+          <dl class="mt-5 grid gap-3 text-sm">
+            <div class="rounded-2xl bg-canvas px-4 py-3">
+              <dt class="text-charcoal/70">Objetivo</dt>
+              <dd class="mt-1 font-semibold text-pine">{{ featured_mission.objective }}</dd>
+            </div>
+            <div class="rounded-2xl bg-fog px-4 py-3">
+              <dt class="text-charcoal/70">Canal preferido</dt>
+              <dd class="mt-1 font-semibold text-pine">{{ featured_mission.channel }}</dd>
+            </div>
+            <div class="rounded-2xl bg-fog px-4 py-3">
+              <dt class="text-charcoal/70">Respuesta esperada</dt>
+              <dd class="mt-1 font-semibold text-pine">{{ featured_mission.response }}</dd>
+            </div>
+          </dl>
+
+          <div class="mt-5 rounded-camp border border-dashed border-ember/40 px-4 py-4">
+            <p class="text-xs uppercase tracking-[0.24em] text-bark">Nota UX</p>
+            <p class="mt-2 text-sm leading-6 text-charcoal/80">{{ featured_mission.note }}</p>
+          </div>
+        </article>
+      </section>
+
+      <section class="mt-6 grid gap-6 2xl:grid-cols-[0.9fr_1.1fr]">
+        {% include 'ligilo/includes/leader_tasks.html' %}
+        {% include 'ligilo/includes/leader_coverage.html' %}
+      </section>
+    </main>
+  </div>
+{% endblock %}

@@ -1,0 +1,23 @@
+<article class="rounded-[2rem] border border-pine/10 bg-white/85 p-5 shadow-card">
+  <div class="flex items-center justify-between gap-4">
+    <div>
+      <p class="text-xs uppercase tracking-[0.28em] text-moss">Cola de acciones</p>
+      <h3 class="mt-2 font-scout text-2xl font-semibold text-pine">Pendientes del lider</h3>
+    </div>
+    <button class="rounded-full border border-ember bg-ember px-4 py-2 text-sm font-semibold text-white">Nueva mision</button>
+  </div>
+
+  <ul class="mt-6 space-y-4 text-sm">
+    {% for task in tasks %}
+      <li class="rounded-camp border border-pine/10 bg-fog px-4 py-4">
+        <div class="flex items-start justify-between gap-4">
+          <div>
+            <p class="font-semibold text-pine">{{ task.title }}</p>
+            <p class="mt-1 text-charcoal/75">{{ task.description }}</p>
+          </div>
+          <span class="rounded-full bg-white px-3 py-1 text-xs font-semibold uppercase tracking-[0.24em] {% if task.tag_tone == 'bark' %}text-bark{% elif task.tag_tone == 'moss' %}text-moss{% else %}text-pine{% endif %}">{{ task.tag }}</span>
+        </div>
+      </li>
+    {% endfor %}
+  </ul>
+</article>

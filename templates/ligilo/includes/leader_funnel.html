@@ -1,0 +1,20 @@
+<article class="rounded-[2rem] border border-pine/10 bg-white/85 p-5 shadow-card">
+  <div class="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+    <div>
+      <p class="text-xs uppercase tracking-[0.28em] text-moss">Flujo del bot</p>
+      <h3 class="mt-2 font-scout text-2xl font-semibold text-pine">Embudo de onboarding</h3>
+    </div>
+    <button class="rounded-full border border-pine px-4 py-2 text-sm font-semibold text-pine">Exportar resumen CSV</button>
+  </div>
+
+  <ol class="mt-6 grid gap-4 md:grid-cols-4">
+    {% for step in funnel_steps %}
+      <li class="rounded-camp border p-4 {% if step.highlight %}border-ember/20 bg-ember/10{% else %}border-pine/10 bg-fog{% endif %}">
+        <p class="text-xs uppercase tracking-[0.24em] {% if step.highlight %}text-bark{% else %}text-moss{% endif %}">{{ step.badge }}</p>
+        <h4 class="mt-2 text-lg font-semibold text-pine">{{ step.title }}</h4>
+        <p class="mt-2 text-sm leading-6 text-charcoal/80">{{ step.description }}</p>
+        <p class="mt-4 text-2xl font-semibold {% if step.highlight %}text-bark{% else %}text-pine{% endif %}">{{ step.value }}</p>
+      </li>
+    {% endfor %}
+  </ol>
+</article>

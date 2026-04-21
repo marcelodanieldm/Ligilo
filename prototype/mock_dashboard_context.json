@@ -1,0 +1,48 @@
+{
+  "lang": "es",
+  "leader": {
+    "initial": "L"
+  },
+  "nav_items": [
+    {"label": "Resumen de patrulla", "href": "#", "active": true},
+    {"label": "Misiones activas", "href": "#", "active": false},
+    {"label": "Progreso por equipo", "href": "#", "active": false},
+    {"label": "Mensajes offline", "href": "#", "active": false},
+    {"label": "Ajustes de idioma", "href": "#", "active": false}
+  ],
+  "connectivity": {
+    "note": "Modo ligero activado. El panel prioriza texto, iconos simples y colas sincronizables para conexiones lentas.",
+    "last_sync": "Hace 42 s",
+    "pending_messages": "12"
+  },
+  "hero_copy": "Supervisa el onboarding del bot, asigna misiones y detecta patrullas sin cobertura sin depender de imagenes pesadas ni tablas densas.",
+  "stats": [
+    {"label": "Scouts activos", "value": "128", "caption": "94% completo en onboarding", "tone": "bg-canvas", "emphasis": "normal"},
+    {"label": "Idiomas en uso", "value": "15", "caption": "ES, EN, PT, TH, KO, JA, FR, ZH, HI, AR, DE, RU, PL, UK, IT", "tone": "bg-fog", "emphasis": "normal"},
+    {"label": "Misiones urgentes", "value": "07", "caption": "2 esperan confirmacion", "tone": "bg-white", "emphasis": "warn"}
+  ],
+  "funnel_steps": [
+    {"badge": "Paso 1", "title": "Inicio", "description": "221 scouts recibieron el mensaje de bienvenida con CTA unico y ligero.", "value": "221", "highlight": false},
+    {"badge": "Paso 2", "title": "Idioma", "description": "204 eligieron idioma entre 15 opciones con botones grandes, etiquetas cortas y scroll ligero.", "value": "92%", "highlight": false},
+    {"badge": "Paso 3", "title": "Mision recibida", "description": "176 confirmaron mision. Hay friccion en patrullas con senal intermitente.", "value": "176", "highlight": true},
+    {"badge": "Paso 4", "title": "Listo para salida", "description": "165 scouts ya enviaron PREPARADO y pueden arrancar la actividad.", "value": "75%", "highlight": false}
+  ],
+  "featured_mission": {
+    "title": "Ruta del faro",
+    "status": "En curso",
+    "objective": "Confirmar orientacion y registrar punto seguro antes de las 18:30.",
+    "channel": "Telegram bot en modo texto plano",
+    "response": "RECIBIDA o NECESITO AYUDA",
+    "note": "El mensaje evita bloques largos, prioriza verbos claros y deja una ruta de emergencia visible en el primer scroll."
+  },
+  "tasks": [
+    {"title": "Revisar scouts sin idioma confirmado", "description": "13 usuarios entraron por enlace compartido y no terminaron la seleccion entre 12 idiomas disponibles.", "tag": "Prioridad alta", "tag_tone": "bark"},
+    {"title": "Reenviar mision a patrulla Norte", "description": "La confirmacion no llego tras 2 intentos; sugerido fallback SMS interno.", "tag": "Automatizable", "tag_tone": "moss"},
+    {"title": "Cerrar briefing de seguridad", "description": "El panel sugiere convertir el briefing en mensaje fijo para 5 grupos nuevos.", "tag": "Hoy", "tag_tone": "pine"}
+  ],
+  "patrols": [
+    {"name": "Patrulla Roble", "status_dot": "bg-moss", "summary": "10 scouts. 100% mision recibida."},
+    {"name": "Patrulla Brasa", "status_dot": "bg-amber-500", "summary": "8 scouts. 2 respuestas retrasadas."},
+    {"name": "Patrulla Rio", "status_dot": "bg-rose-500", "summary": "12 scouts. Activar modo de reintento ligero."}
+  ]
+}

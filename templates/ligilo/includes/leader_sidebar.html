@@ -1,0 +1,30 @@
+<aside class="paper-grain border-b border-pine/10 bg-fog/90 px-5 py-6 lg:min-h-screen lg:w-80 lg:border-b-0 lg:border-r lg:px-6 lg:py-8">
+  <div class="flex items-center gap-4">
+    <div class="flex h-14 w-14 items-center justify-center rounded-full border-2 border-ember bg-ember/10 text-xl font-bold text-pine">{{ leader.initial|default:'L' }}</div>
+    <div>
+      <p class="text-xs uppercase tracking-[0.3em] text-moss">Ligilo Scout SaaS</p>
+      <h1 class="font-scout text-2xl font-semibold text-pine">Base del lider</h1>
+    </div>
+  </div>
+
+  <nav class="mt-8 grid gap-3 text-sm lg:mt-10" aria-label="Navegacion principal">
+    {% for item in nav_items %}
+      <a href="{{ item.href|default:'#' }}" class="rounded-2xl border px-4 py-3 font-semibold {% if item.active %}border-pine bg-pine text-fog{% else %}border-pine/15 bg-white/70 text-pine{% endif %}">{{ item.label }}</a>
+    {% endfor %}
+  </nav>
+
+  <section class="mt-8 rounded-camp border border-ember/20 bg-ember/10 p-4 lg:mt-10" aria-label="Estado de conectividad">
+    <p class="text-xs uppercase tracking-[0.28em] text-bark">Conectividad</p>
+    <p class="mt-3 text-sm leading-6 text-charcoal">{{ connectivity.note }}</p>
+    <dl class="mt-4 grid gap-3 text-sm">
+      <div class="flex items-center justify-between rounded-2xl bg-white/70 px-3 py-2">
+        <dt>Ultima sincronizacion</dt>
+        <dd class="font-semibold text-pine">{{ connectivity.last_sync }}</dd>
+      </div>
+      <div class="flex items-center justify-between rounded-2xl bg-white/70 px-3 py-2">
+        <dt>Mensajes pendientes</dt>
+        <dd class="font-semibold text-bark">{{ connectivity.pending_messages }}</dd>
+      </div>
+    </dl>
+  </section>
+</aside>

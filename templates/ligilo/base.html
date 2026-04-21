@@ -1,0 +1,78 @@
+<!DOCTYPE html>
+<html lang="{{ lang|default:'es' }}">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>{% block title %}Ligilo{% endblock %}</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          colors: {
+            pine: '#26413c',
+            moss: '#56704f',
+            bark: '#6a4a3c',
+            ember: '#b26836',
+            canvas: '#efe6d2',
+            fog: '#f8f4ea',
+            charcoal: '#1f2933',
+            sage: '#c5cfb7'
+          },
+          boxShadow: {
+            card: '0 14px 36px rgba(38, 65, 60, 0.12)'
+          },
+          borderRadius: {
+            camp: '1.5rem'
+          },
+          fontFamily: {
+            scout: ['Iowan Old Style', 'Palatino Linotype', 'Book Antiqua', 'Georgia', 'serif']
+          }
+        }
+      }
+    };
+  </script>
+  <style>
+    :root {
+      color-scheme: light;
+    }
+
+    body {
+      font-family: "Iowan Old Style", "Palatino Linotype", "Book Antiqua", Georgia, serif;
+      background:
+        radial-gradient(circle at top left, rgba(178, 104, 54, 0.14), transparent 24%),
+        radial-gradient(circle at bottom right, rgba(86, 112, 79, 0.12), transparent 20%),
+        linear-gradient(135deg, #f8f4ea 0%, #efe6d2 54%, #e4d6b8 100%);
+      color: #1f2933;
+    }
+
+    .paper-grain {
+      background-image:
+        linear-gradient(rgba(38, 65, 60, 0.03) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(38, 65, 60, 0.03) 1px, transparent 1px);
+      background-size: 22px 22px;
+    }
+
+    .map-grid {
+      background-image:
+        linear-gradient(rgba(38, 65, 60, 0.08) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(38, 65, 60, 0.08) 1px, transparent 1px),
+        radial-gradient(circle at center, rgba(178, 104, 54, 0.18), transparent 40%);
+      background-size: 28px 28px, 28px 28px, 100% 100%;
+    }
+
+    .rope-divider::before {
+      content: '';
+      display: block;
+      height: 3px;
+      border-radius: 999px;
+      background: repeating-linear-gradient(90deg, #6a4a3c 0 12px, #b26836 12px 24px);
+      opacity: 0.4;
+    }
+  </style>
+  {% block extra_head %}{% endblock %}
+</head>
+<body class="min-h-screen text-charcoal">
+  {% block body %}{% endblock %}
+</body>
+</html>

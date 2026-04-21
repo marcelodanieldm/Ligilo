@@ -1,0 +1,1 @@
+"""Ligilo scouting domain package."""

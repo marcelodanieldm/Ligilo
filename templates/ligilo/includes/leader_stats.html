@@ -1,0 +1,9 @@
+<div class="grid gap-3 sm:grid-cols-3 xl:min-w-[560px]">
+  {% for stat in stats %}
+    <article class="rounded-camp border border-pine/10 {{ stat.tone|default:'bg-white' }} px-4 py-4">
+      <p class="text-xs uppercase tracking-[0.28em] text-moss">{{ stat.label }}</p>
+      <p class="mt-2 text-3xl font-semibold {% if stat.emphasis == 'warn' %}text-bark{% else %}text-pine{% endif %}">{{ stat.value }}</p>
+      <p class="mt-1 text-sm text-charcoal/70">{{ stat.caption }}</p>
+    </article>
+  {% endfor %}
+</div>
