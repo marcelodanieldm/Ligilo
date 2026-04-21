@@ -19,8 +19,12 @@ from fastapi_app.services.gemini_seed_validator import validate_esperanto_conten
 from fastapi_app.services.patrol_service import (
     bind_chat_with_invitation_token,
     find_patrol_by_chat_id,
+    get_match_celebration_payloads,
     get_scout_registration_status,
+    increase_training_points,
+    mark_match_celebration_interaction,
 )
+from fastapi_app.services.training_tutor import generate_training_tutor_reply
 
 _telegram_app: Application | None = None
 _init_lock = asyncio.Lock()
@@ -79,8 +83,53 @@ def _build_flagged_message() -> str:
     )
 
 
+def _country_flag(country_code: str | None) -> str:
+    code = (country_code or "").strip().upper()
+    if len(code) != 2 or not code.isalpha():
+        return "🏳️"
+    return chr(127397 + ord(code[0])) + chr(127397 + ord(code[1]))
+
+
+def _build_match_card_message(payload: dict) -> str:
+    patrol = payload.get("patrol") or {}
+    sister = payload.get("sister_patrol") or {}
+    own_flag = _country_flag(str(patrol.get("country_code") or ""))
+    sister_flag = _country_flag(str(sister.get("country_code") or ""))
+    own_name = _escape_markdown_v2(str(patrol.get("name") or "Patrulla"))
+    own_delegation = _escape_markdown_v2(str(patrol.get("delegation_name") or ""))
+    sister_name = _escape_markdown_v2(str(sister.get("name") or "Patrulla hermana"))
+    sister_delegation = _escape_markdown_v2(str(sister.get("delegation_name") or ""))
+    phrase = _escape_markdown_v2(str(payload.get("suggested_phrase") or "Saluton, amikoj!"))
+
+    return (
+        "🎉 *MATCH ENCONTRADO*\n\n"
+        f"{own_flag} *{own_name}* \\- {own_delegation}\n"
+        "🤝\n"
+        f"{sister_flag} *{sister_name}* \\- {sister_delegation}\n\n"
+        "Primera frase sugerida en Esperanto\\:\n"
+        f"`{phrase}`"
+    )
+
+
+async def _send_match_cards_to_patrols(context: ContextTypes.DEFAULT_TYPE, chat_id: int) -> None:
+    payloads = await get_match_celebration_payloads(chat_id)
+    for payload in payloads:
+        target_chat = payload.get("chat_id")
+        if not target_chat:
+            continue
+        await context.bot.send_message(
+            chat_id=target_chat,
+            text=_build_match_card_message(payload),
+            parse_mode=ParseMode.MARKDOWN_V2,
+        )
+
+
 async def _validate_linked_patrol_message(text: str) -> dict[str, object]:
     return await asyncio.to_thread(validate_esperanto_content, text)
+
+
+async def _generate_tutor_message(text: str) -> str:
+    return await asyncio.to_thread(generate_training_tutor_reply, text)
 
 
 async def handle_welcome_action(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -189,6 +238,41 @@ async def handle_linked_text(update: Update, context: ContextTypes.DEFAULT_TYPE)
         )
         return
 
+    registration = await get_scout_registration_status(chat_id)
+    real_match_ready = bool(registration.get("has_sister_patrol")) and not bool(
+        registration.get("is_training")
+    )
+
+    if real_match_ready and context.user_data.get("training_mode"):
+        sister = registration.get("sister_patrol") or {}
+        own = registration.get("patrol") or {}
+        match_id = registration.get("match_id")
+        if context.user_data.get("last_swap_match_id") != match_id:
+            await update.message.reply_text(
+                "Stelo: Misión cumplida, patrulla. Ahora les toca conocer a su match internacional real."
+            )
+            await update.message.reply_text(
+                "Nueva conexion humana activa.\n"
+                f"Patrulla: {own.get('delegation_name')} / {own.get('name')}\n"
+                f"Patrulla hermana: {sister.get('delegation_name')} / {sister.get('name')}\n"
+                "Saluden con: Saluton, amikoj!"
+            )
+            context.user_data["last_swap_match_id"] = match_id
+        context.user_data["training_mode"] = False
+
+    if not real_match_ready:
+        context.user_data["training_mode"] = True
+        tutor_reply = await _generate_tutor_message(incoming_text)
+        await update.message.reply_text(f"Patrulla Stelo (Tutor IA):\n{tutor_reply}")
+        total_points = await increase_training_points(chat_id, 1)
+        await update.message.reply_text(
+            f"Puntos de entrenamiento acumulados: {total_points}. Se conservaran al pasar a match real."
+        )
+        return
+
+    await _send_match_cards_to_patrols(context, chat_id)
+    await mark_match_celebration_interaction(chat_id)
+
     try:
         validation = await _validate_linked_patrol_message(incoming_text)
     except ValueError:
@@ -240,14 +324,25 @@ async def handle_status(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
         await update.message.reply_text(
             "Estado de perfil: COMPLETO.\n"
             f"Patrulla: {patrol.get('delegation_name')} / {patrol.get('name')}\n"
+            f"Puntos de entrenamiento: {patrol.get('training_points', 0)}\n"
             f"Patrulla hermana: {sister_patrol.get('delegation_name')} / {sister_patrol.get('name')} "
             f"({sister_patrol.get('status')})."
+        )
+        return
+
+    if status.get("is_training"):
+        await update.message.reply_text(
+            "Estado de perfil: EN ENTRENAMIENTO.\n"
+            f"Patrulla vinculada: {patrol.get('delegation_name')} / {patrol.get('name')}\n"
+            f"Puntos de entrenamiento: {patrol.get('training_points', 0)}\n"
+            "Tutor activo: Patrulla Stelo."
         )
         return
 
     await update.message.reply_text(
         "Estado de perfil: PARCIAL.\n"
         f"Patrulla vinculada: {patrol.get('delegation_name')} / {patrol.get('name')}\n"
+        f"Puntos de entrenamiento: {patrol.get('training_points', 0)}\n"
         "Pendiente: asignacion de patrulla hermana."
     )
 

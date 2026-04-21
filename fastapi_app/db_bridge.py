@@ -1,10 +1,14 @@
 import os
 import uuid
+from datetime import timedelta
 
 import django
 from asgiref.sync import sync_to_async
+from django.contrib.auth import get_user_model
 from django.db import transaction
+from django.db.models import F
 from django.db.models import Q
+from django.utils import timezone
 
 
 if not os.getenv("DJANGO_SETTINGS_MODULE"):
@@ -12,7 +16,10 @@ if not os.getenv("DJANGO_SETTINGS_MODULE"):
 
 django.setup()
 
-from apps.scouting.models import Patrol, PatrolMatch  # noqa: E402
+from apps.scouting.models import AuditLog, MatchCelebrationEvent, Patrol, PatrolMatch  # noqa: E402
+
+
+User = get_user_model()
 
 
 def _serialize_patrol(patrol: Patrol | None) -> dict | None:
@@ -24,6 +31,7 @@ def _serialize_patrol(patrol: Patrol | None) -> dict | None:
         "delegation_name": patrol.delegation_name,
         "event_id": patrol.event_id,
         "telegram_chat_id": patrol.telegram_chat_id,
+        "training_points": patrol.training_points,
     }
 
 
@@ -81,6 +89,8 @@ def get_registration_status(chat_id: int) -> dict:
             "bound": False,
             "registration_complete": False,
             "has_sister_patrol": False,
+            "is_training": True,
+            "match_id": None,
             "patrol": None,
             "sister_patrol": None,
         }
@@ -96,19 +106,152 @@ def get_registration_status(chat_id: int) -> dict:
     )
 
     sister_patrol = None
+    is_training = True
+    match_id = None
     if match is not None:
+        match_id = match.id
+        is_training = bool(match.is_training)
         sibling = match.patrol_b if match.patrol_a_id == patrol.id else match.patrol_a
-        sister_patrol = {
-            "id": sibling.id,
-            "name": sibling.name,
-            "delegation_name": sibling.delegation_name,
-            "status": match.status,
-        }
+        if not is_training:
+            sister_patrol = {
+                "id": sibling.id,
+                "name": sibling.name,
+                "delegation_name": sibling.delegation_name,
+                "status": match.status,
+            }
 
     return {
         "bound": True,
         "registration_complete": sister_patrol is not None,
         "has_sister_patrol": sister_patrol is not None,
+        "is_training": is_training,
+        "match_id": match_id,
         "patrol": _serialize_patrol(patrol),
         "sister_patrol": sister_patrol,
     }
+
+
+def create_audit_log_entry(
+    *,
+    user_identifier: str,
+    input_text: str,
+    ai_response: dict,
+    flagged_status: bool,
+) -> None:
+    user_obj = None
+    normalized_id = user_identifier.strip()
+    if normalized_id.isdigit():
+        user_obj = User.objects.filter(pk=int(normalized_id)).first()
+
+    AuditLog.objects.create(
+        user=user_obj,
+        user_identifier=normalized_id,
+        input_text=input_text,
+        ai_response=ai_response,
+        flagged_status=flagged_status,
+    )
+
+
+def _serialize_match_card_payload(patrol: Patrol, sister: Patrol, patrol_match: PatrolMatch) -> dict:
+    return {
+        "chat_id": patrol.telegram_chat_id,
+        "match_id": patrol_match.id,
+        "patrol": {
+            "id": patrol.id,
+            "name": patrol.name,
+            "delegation_name": patrol.delegation_name,
+            "country_code": patrol.country_code,
+        },
+        "sister_patrol": {
+            "id": sister.id,
+            "name": sister.name,
+            "delegation_name": sister.delegation_name,
+            "country_code": sister.country_code,
+        },
+        "suggested_phrase": "Saluton, amikoj!",
+    }
+
+
+@sync_to_async
+def prepare_match_celebration_payloads(chat_id: int) -> list[dict]:
+    patrol = Patrol.objects.select_related("event").filter(telegram_chat_id=chat_id).first()
+    if patrol is None:
+        return []
+
+    patrol_match = (
+        PatrolMatch.objects.select_related("patrol_a", "patrol_b")
+        .filter(
+            Q(patrol_a_id=patrol.id) | Q(patrol_b_id=patrol.id),
+            status__in=[PatrolMatch.Status.PROPOSED, PatrolMatch.Status.ACTIVE],
+            is_training=False,
+        )
+        .order_by("-matched_at")
+        .first()
+    )
+    if patrol_match is None:
+        return []
+
+    patrol_a = patrol_match.patrol_a
+    patrol_b = patrol_match.patrol_b
+    recipients: list[dict] = []
+
+    with transaction.atomic():
+        for own, sister in ((patrol_a, patrol_b), (patrol_b, patrol_a)):
+            if not own.telegram_chat_id:
+                continue
+
+            event_obj, created = MatchCelebrationEvent.objects.get_or_create(
+                patrol_match=patrol_match,
+                patrol=own,
+                defaults={
+                    "event_name": "match_celebrated",
+                    "telegram_chat_id": own.telegram_chat_id,
+                },
+            )
+
+            if event_obj.telegram_chat_id != own.telegram_chat_id:
+                event_obj.telegram_chat_id = own.telegram_chat_id
+                event_obj.save(update_fields=["telegram_chat_id"])
+
+            if created:
+                recipients.append(_serialize_match_card_payload(own, sister, patrol_match))
+
+    return recipients
+
+
+@sync_to_async
+def capture_match_celebration_interaction(chat_id: int) -> None:
+    patrol = Patrol.objects.filter(telegram_chat_id=chat_id).first()
+    if patrol is None:
+        return
+
+    event = (
+        MatchCelebrationEvent.objects.select_related("patrol_match")
+        .filter(patrol=patrol, first_interaction_at__isnull=True)
+        .order_by("-sent_at")
+        .first()
+    )
+    if event is None:
+        return
+
+    now = timezone.now()
+    elapsed = now - event.sent_at
+    seconds = max(0, int(elapsed / timedelta(seconds=1)))
+    event.first_interaction_at = now
+    event.first_interaction_seconds = seconds
+    event.save(update_fields=["first_interaction_at", "first_interaction_seconds"])
+
+
+@sync_to_async
+def add_training_points(chat_id: int, points: int = 1) -> int:
+    patrol = Patrol.objects.filter(telegram_chat_id=chat_id).first()
+    if patrol is None:
+        return 0
+
+    safe_points = max(0, points)
+    if safe_points == 0:
+        return patrol.training_points
+
+    Patrol.objects.filter(pk=patrol.pk).update(training_points=F("training_points") + safe_points)
+    patrol.refresh_from_db(fields=["training_points"])
+    return patrol.training_points

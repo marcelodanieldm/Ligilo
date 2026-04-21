@@ -7,7 +7,15 @@ from django.http import HttpRequest, JsonResponse
 from django.urls import path, reverse
 from django.utils import timezone
 
-from apps.scouting.models import Event, Mission, Patrol, PatrolMatch, Submission
+from apps.scouting.models import (
+    AuditLog,
+    Event,
+    MatchCelebrationEvent,
+    Mission,
+    Patrol,
+    PatrolMatch,
+    Submission,
+)
 
 
 def _parse_submission_payload(payload: str) -> dict | None:
@@ -170,6 +178,7 @@ class PatrolAdmin(admin.ModelAdmin):
         "official_language_name",
         "telegram_chat_id",
         "invitation_token",
+        "training_points",
         "leader_name",
         "is_active",
     )
@@ -187,8 +196,8 @@ class PatrolAdmin(admin.ModelAdmin):
 
 @admin.register(PatrolMatch)
 class PatrolMatchAdmin(admin.ModelAdmin):
-    list_display = ("event", "patrol_a", "patrol_b", "status", "matched_at")
-    list_filter = ("event", "status")
+    list_display = ("event", "patrol_a", "patrol_b", "status", "is_training", "matched_at")
+    list_filter = ("event", "status", "is_training")
     search_fields = ("patrol_a__delegation_name", "patrol_b__delegation_name")
     inlines = (MissionInline,)
 
@@ -206,6 +215,38 @@ class SubmissionAdmin(admin.ModelAdmin):
     list_display = ("mission", "patrol", "submitted_by", "status", "submitted_at")
     list_filter = ("status", "submitted_at", "patrol__event")
     search_fields = ("mission__title", "patrol__delegation_name", "submitted_by")
+
+
+@admin.register(AuditLog)
+class AuditLogAdmin(admin.ModelAdmin):
+    list_display = ("timestamp", "user", "user_identifier", "flagged_status")
+    list_filter = ("flagged_status", "timestamp")
+    search_fields = ("user_identifier", "input_text")
+    readonly_fields = ("timestamp", "user", "user_identifier", "input_text", "ai_response", "flagged_status")
+
+
+@admin.register(MatchCelebrationEvent)
+class MatchCelebrationEventAdmin(admin.ModelAdmin):
+    list_display = (
+        "sent_at",
+        "event_name",
+        "patrol_match",
+        "patrol",
+        "telegram_chat_id",
+        "first_interaction_at",
+        "first_interaction_seconds",
+    )
+    list_filter = ("event_name", "sent_at", "first_interaction_at")
+    search_fields = ("patrol__name", "patrol__delegation_name")
+    readonly_fields = (
+        "event_name",
+        "patrol_match",
+        "patrol",
+        "telegram_chat_id",
+        "sent_at",
+        "first_interaction_at",
+        "first_interaction_seconds",
+    )
 
 
 def _patch_admin_index() -> None:

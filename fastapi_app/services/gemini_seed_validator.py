@@ -1,7 +1,9 @@
 from __future__ import annotations
 
 import json
+import logging
 import os
+import re
 import time
 from typing import Any
 from urllib import error, request
@@ -23,6 +25,19 @@ SYSTEM_PROMPT = (
     "No markdown, no extra keys, no explanations."
 )
 
+logger = logging.getLogger(__name__)
+
+_NAME_PATTERN = re.compile(r"\b([A-ZÁÉÍÓÚÑ][a-záéíóúñ]{2,})(?:\s+[A-ZÁÉÍÓÚÑ][a-záéíóúñ]{2,})*\b")
+_EMAIL_PATTERN = re.compile(r"\b[\w.%-]+@[\w.-]+\.[A-Za-z]{2,}\b")
+_PHONE_PATTERN = re.compile(r"\+?\d[\d\s\-]{7,}\d")
+
+
+def anonymize_sensitive_text(text: str) -> str:
+    sanitized = _EMAIL_PATTERN.sub("[REDACTED_EMAIL]", text)
+    sanitized = _PHONE_PATTERN.sub("[REDACTED_PHONE]", sanitized)
+    sanitized = _NAME_PATTERN.sub("[REDACTED_NAME]", sanitized)
+    return sanitized
+
 
 def _call_gemini(
     *,
@@ -32,6 +47,13 @@ def _call_gemini(
     temperature: float,
     timeout_seconds: int,
 ) -> str:
+    if os.getenv("GEMINI_EXTERNAL_DEBUG_LOGS", "false").lower() == "true":
+        logger.info(
+            "Gemini request prepared (model=%s, text=%s)",
+            model,
+            anonymize_sensitive_text(text_input)[:180],
+        )
+
     payload = {
         "system_instruction": {"parts": [{"text": SYSTEM_PROMPT}]},
         "contents": [
@@ -62,7 +84,9 @@ def _call_gemini(
             raw = resp.read().decode("utf-8")
     except error.HTTPError as exc:
         body = exc.read().decode("utf-8", errors="replace")
-        raise RuntimeError(f"Gemini HTTP {exc.code}: {body}") from exc
+        raise RuntimeError(
+            f"Gemini HTTP {exc.code}: {anonymize_sensitive_text(body)}"
+        ) from exc
     except error.URLError as exc:
         raise RuntimeError(f"Network error: {exc.reason}") from exc
 
@@ -167,6 +191,13 @@ def validate_esperanto_content(
 
             return parsed
         except RuntimeError:
+            if os.getenv("GEMINI_EXTERNAL_DEBUG_LOGS", "false").lower() == "true":
+                logger.warning(
+                    "Gemini validation retry %s/%s for text=%s",
+                    attempt,
+                    max_retries,
+                    anonymize_sensitive_text(text)[:180],
+                )
             if attempt == max_retries:
                 break
             backoff = initial_backoff_seconds * (2 ** (attempt - 1))

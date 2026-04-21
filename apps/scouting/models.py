@@ -1,9 +1,13 @@
 import uuid
 
+from django.contrib.auth import get_user_model
 from django.core.exceptions import ValidationError
 from django.db import models
 from django.db.models import Q
 from django.utils.text import slugify
+
+
+User = get_user_model()
 
 
 class Event(models.Model):
@@ -41,6 +45,7 @@ class Patrol(models.Model):
     leader_email = models.EmailField(blank=True)
     telegram_chat_id = models.BigIntegerField(blank=True, null=True, unique=True)
     invitation_token = models.UUIDField(default=uuid.uuid4, blank=True, null=True, unique=True)
+    training_points = models.PositiveIntegerField(default=0)
     member_count = models.PositiveSmallIntegerField(default=1)
     is_active = models.BooleanField(default=True)
     created_at = models.DateTimeField(auto_now_add=True)
@@ -92,6 +97,7 @@ class PatrolMatch(models.Model):
     patrol_a = models.ForeignKey(Patrol, on_delete=models.CASCADE, related_name="matches_as_a")
     patrol_b = models.ForeignKey(Patrol, on_delete=models.CASCADE, related_name="matches_as_b")
     status = models.CharField(max_length=20, choices=Status.choices, default=Status.PROPOSED)
+    is_training = models.BooleanField(default=False)
     matched_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
@@ -203,3 +209,55 @@ class Submission(models.Model):
                 )
             if self.patrol.event_id != self.mission.event_id:
                 raise ValidationError("Submeto devas uzi la saman eventon por misio kaj patrolo.")
+
+
+class AuditLog(models.Model):
+    user = models.ForeignKey(
+        User,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="safe_from_harm_audit_logs",
+    )
+    user_identifier = models.CharField(max_length=120, blank=True)
+    input_text = models.TextField()
+    ai_response = models.JSONField(default=dict)
+    flagged_status = models.BooleanField(default=False)
+    timestamp = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-timestamp"]
+
+    def __str__(self) -> str:
+        identity = self.user_identifier or "anonymous"
+        return f"AuditLog({identity}, flagged={self.flagged_status})"
+
+
+class MatchCelebrationEvent(models.Model):
+    event_name = models.CharField(max_length=40, default="match_celebrated")
+    patrol_match = models.ForeignKey(
+        PatrolMatch,
+        on_delete=models.CASCADE,
+        related_name="celebration_events",
+    )
+    patrol = models.ForeignKey(
+        Patrol,
+        on_delete=models.CASCADE,
+        related_name="celebration_events",
+    )
+    telegram_chat_id = models.BigIntegerField(blank=True, null=True)
+    sent_at = models.DateTimeField(auto_now_add=True)
+    first_interaction_at = models.DateTimeField(blank=True, null=True)
+    first_interaction_seconds = models.PositiveIntegerField(blank=True, null=True)
+
+    class Meta:
+        ordering = ["-sent_at"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["patrol_match", "patrol"],
+                name="unique_match_celebration_per_patrol",
+            )
+        ]
+
+    def __str__(self) -> str:
+        return f"{self.event_name}::{self.patrol}"
