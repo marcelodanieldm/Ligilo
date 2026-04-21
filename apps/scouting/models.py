@@ -1,4 +1,4 @@
-import secrets
+import uuid
 
 from django.core.exceptions import ValidationError
 from django.db import models
@@ -40,7 +40,7 @@ class Patrol(models.Model):
     leader_name = models.CharField(max_length=160)
     leader_email = models.EmailField(blank=True)
     telegram_chat_id = models.BigIntegerField(blank=True, null=True, unique=True)
-    invitation_token = models.CharField(max_length=32, blank=True, null=True, unique=True)
+    invitation_token = models.UUIDField(default=uuid.uuid4, blank=True, null=True, unique=True)
     member_count = models.PositiveSmallIntegerField(default=1)
     is_active = models.BooleanField(default=True)
     created_at = models.DateTimeField(auto_now_add=True)
@@ -65,19 +65,6 @@ class Patrol(models.Model):
 
     def __str__(self) -> str:
         return f"{self.delegation_name} - {self.name}"
-
-    @staticmethod
-    def _build_invitation_token() -> str:
-        # Ni uzas mallongan URL-sekuran token por facila mana enigo en Telegram.
-        return secrets.token_urlsafe(10).replace("-", "").replace("_", "")[:16].upper()
-
-    def save(self, *args, **kwargs):
-        if not self.invitation_token:
-            token = self._build_invitation_token()
-            while Patrol.objects.filter(invitation_token=token).exists():
-                token = self._build_invitation_token()
-            self.invitation_token = token
-        super().save(*args, **kwargs)
 
     def clean(self):
         super().clean()

@@ -1,4 +1,5 @@
 import json
+import uuid
 
 from django.contrib import admin, messages
 from django.core.exceptions import ValidationError
@@ -153,7 +154,7 @@ def create_valid_match(modeladmin, request, queryset):
 def regenerate_invitation_token(modeladmin, request, queryset):
     updated = 0
     for patrol in queryset:
-        patrol.invitation_token = None
+        patrol.invitation_token = uuid.uuid4()
         patrol.save(update_fields=["invitation_token", "updated_at"])
         updated += 1
     messages.success(request, f"Se regeneraron {updated} tokens de invitacion.")
