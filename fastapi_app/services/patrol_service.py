@@ -1,6 +1,8 @@
 from fastapi_app.db_bridge import (
     add_training_points,
+    award_points_by_chat,
     bind_chat_to_patrol_token,
+    build_certification_qr_payload,
     capture_match_celebration_interaction,
     get_patrol_by_chat_id,
     get_registration_status,
@@ -30,3 +32,22 @@ async def mark_match_celebration_interaction(chat_id: int) -> None:
 
 async def increase_training_points(chat_id: int, points: int = 1) -> int:
     return await add_training_points(chat_id, points)
+
+
+async def award_patrol_points(
+    chat_id: int,
+    *,
+    event_type: str,
+    external_ref: str = "",
+    metadata: dict | None = None,
+) -> dict:
+    return await award_points_by_chat(
+        chat_id,
+        event_type=event_type,
+        external_ref=external_ref,
+        metadata=metadata,
+    )
+
+
+async def get_certification_qr_payload(patrol_id: int) -> dict:
+    return await build_certification_qr_payload(patrol_id)

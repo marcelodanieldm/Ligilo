@@ -1,0 +1,1 @@
+Escucha este audio de un scout. Transcribe lo que dice en Esperanto y evalúa su pronunciación en una escala del 1 al 5. Si no se entiende nada, pide amablemente que lo repita

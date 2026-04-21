@@ -46,6 +46,7 @@ class Patrol(models.Model):
     telegram_chat_id = models.BigIntegerField(blank=True, null=True, unique=True)
     invitation_token = models.UUIDField(default=uuid.uuid4, blank=True, null=True, unique=True)
     training_points = models.PositiveIntegerField(default=0)
+    sel_points = models.PositiveIntegerField(default=0)
     member_count = models.PositiveSmallIntegerField(default=1)
     is_active = models.BooleanField(default=True)
     created_at = models.DateTimeField(auto_now_add=True)
@@ -261,3 +262,79 @@ class MatchCelebrationEvent(models.Model):
 
     def __str__(self) -> str:
         return f"{self.event_name}::{self.patrol}"
+
+
+class PointLog(models.Model):
+    class EventType(models.TextChoices):
+        TEXT_VALIDATED = "text_validated", "Mensaje de texto validado"
+        AUDIO_VALIDATED = "audio_validated", "Audio validado"
+        YOUTUBE_MISSION = "youtube_mission", "Video de YouTube (Mision cumplida)"
+
+    patrol = models.ForeignKey(Patrol, on_delete=models.CASCADE, related_name="point_logs")
+    event_type = models.CharField(max_length=40, choices=EventType.choices)
+    points = models.PositiveIntegerField()
+    external_ref = models.CharField(max_length=120, blank=True)
+    metadata = models.JSONField(default=dict)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-created_at"]
+
+    def __str__(self) -> str:
+        return f"PointLog({self.patrol_id}, {self.event_type}, +{self.points})"
+
+
+class Payment(models.Model):
+    class Status(models.TextChoices):
+        PENDING = "pending", "Pendiente"
+        COMPLETED = "completed", "Completado"
+        FAILED = "failed", "Fallido"
+        REFUNDED = "refunded", "Reembolsado"
+
+    class PaymentMethod(models.TextChoices):
+        STRIPE = "stripe", "Stripe"
+        PAYPAL = "paypal", "PayPal"
+
+    class ProductType(models.TextChoices):
+        STELO_PASS = "stelo_pass", "Stelo Pass - Acceso a Misiones"
+        PREMIUM_FEATURES = "premium_features", "Características Premium"
+        TRAINING_BOOST = "training_boost", "Impulso de Entrenamiento"
+
+    patrol = models.ForeignKey(Patrol, on_delete=models.CASCADE, related_name="payments")
+    product_type = models.CharField(max_length=40, choices=ProductType.choices)
+    amount_cents = models.PositiveIntegerField()  # Amount in cents (USD)
+    currency = models.CharField(max_length=3, default="USD")
+    status = models.CharField(max_length=20, choices=Status.choices, default=Status.PENDING)
+    payment_method = models.CharField(max_length=20, choices=PaymentMethod.choices)
+    
+    # Payment provider references
+    stripe_payment_intent_id = models.CharField(max_length=200, blank=True, unique=True)
+    paypal_transaction_id = models.CharField(max_length=200, blank=True, unique=True)
+    
+    # Metadata
+    metadata = models.JSONField(default=dict)  # Store additional info (product details, user email, etc.)
+    error_message = models.TextField(blank=True)
+    
+    # Timestamps
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    completed_at = models.DateTimeField(blank=True, null=True)
+
+    class Meta:
+        ordering = ["-created_at"]
+        indexes = [
+            models.Index(fields=["patrol", "-created_at"]),
+            models.Index(fields=["status", "-created_at"]),
+        ]
+
+    def __str__(self) -> str:
+        amount_usd = self.amount_cents / 100
+        return f"Payment({self.patrol.name}, {self.product_type}, ${amount_usd}, {self.status})"
+
+    def clean(self):
+        super().clean()
+        if self.status == self.Status.COMPLETED:
+            if not self.stripe_payment_intent_id and not self.paypal_transaction_id:
+                raise ValidationError(
+                    "Pagos completados deben tener una referencia de transaccion."
+                )

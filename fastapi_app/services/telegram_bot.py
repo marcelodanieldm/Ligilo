@@ -15,8 +15,11 @@ from telegram.ext import (
     filters,
 )
 
+from fastapi_app.services.audio_stt_validator import transcribe_and_score_audio
 from fastapi_app.services.gemini_seed_validator import validate_esperanto_content
+from fastapi_app.services.media_storage import store_success_audio_sample
 from fastapi_app.services.patrol_service import (
+    award_patrol_points,
     bind_chat_with_invitation_token,
     find_patrol_by_chat_id,
     get_match_celebration_payloads,
@@ -25,6 +28,10 @@ from fastapi_app.services.patrol_service import (
     mark_match_celebration_interaction,
 )
 from fastapi_app.services.training_tutor import generate_training_tutor_reply
+from fastapi_app.services.voice_pipeline import (
+    download_and_convert_voice,
+    extract_youtube_video_id,
+)
 
 _telegram_app: Application | None = None
 _init_lock = asyncio.Lock()
@@ -130,6 +137,10 @@ async def _validate_linked_patrol_message(text: str) -> dict[str, object]:
 
 async def _generate_tutor_message(text: str) -> str:
     return await asyncio.to_thread(generate_training_tutor_reply, text)
+
+
+async def _transcribe_voice_with_gemini(audio_path: str) -> dict[str, object]:
+    return await asyncio.to_thread(transcribe_and_score_audio, audio_path)
 
 
 async def handle_welcome_action(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -305,6 +316,15 @@ async def handle_linked_text(update: Update, context: ContextTypes.DEFAULT_TYPE)
         _build_success_validation_message(encouragement),
         parse_mode=ParseMode.MARKDOWN_V2,
     )
+    points_result = await award_patrol_points(
+        chat_id,
+        event_type="text_validated",
+        metadata={"source": "telegram_text"},
+    )
+    if points_result.get("awarded"):
+        await update.message.reply_text(
+            f"+10 puntos SEL por mensaje validado. Total: {points_result.get('sel_points', 0)}"
+        )
 
 
 async def handle_status(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -325,6 +345,7 @@ async def handle_status(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
             "Estado de perfil: COMPLETO.\n"
             f"Patrulla: {patrol.get('delegation_name')} / {patrol.get('name')}\n"
             f"Puntos de entrenamiento: {patrol.get('training_points', 0)}\n"
+            f"Puntos SEL: {patrol.get('sel_points', 0)}\n"
             f"Patrulla hermana: {sister_patrol.get('delegation_name')} / {sister_patrol.get('name')} "
             f"({sister_patrol.get('status')})."
         )
@@ -335,6 +356,7 @@ async def handle_status(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
             "Estado de perfil: EN ENTRENAMIENTO.\n"
             f"Patrulla vinculada: {patrol.get('delegation_name')} / {patrol.get('name')}\n"
             f"Puntos de entrenamiento: {patrol.get('training_points', 0)}\n"
+            f"Puntos SEL: {patrol.get('sel_points', 0)}\n"
             "Tutor activo: Patrulla Stelo."
         )
         return
@@ -343,8 +365,149 @@ async def handle_status(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
         "Estado de perfil: PARCIAL.\n"
         f"Patrulla vinculada: {patrol.get('delegation_name')} / {patrol.get('name')}\n"
         f"Puntos de entrenamiento: {patrol.get('training_points', 0)}\n"
+        f"Puntos SEL: {patrol.get('sel_points', 0)}\n"
         "Pendiente: asignacion de patrulla hermana."
     )
+
+
+async def handle_entregar(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    if not update.effective_chat or not update.message:
+        return
+
+    patrol = await find_patrol_by_chat_id(update.effective_chat.id)
+    if patrol is None:
+        await update.message.reply_text(
+            "Antes de entregar contenido, debes vincular tu patrulla. Usa /start."
+        )
+        return
+
+    raw_link = " ".join(context.args).strip() if context.args else ""
+    if not raw_link:
+        await update.message.reply_text(
+            "Uso: /entregar <link_de_youtube>. Ejemplo: /entregar https://youtu.be/ABCDEFGHIJK"
+        )
+        return
+
+    video_id = extract_youtube_video_id(raw_link)
+    if not video_id:
+        await update.message.reply_text(
+            "No pude validar ese link de YouTube. Comparte una URL valida de watch, shorts, embed o youtu.be."
+        )
+        return
+
+    await update.message.reply_text(
+        "Entrega registrada.\n"
+        f"video_id: {video_id}\n"
+        "Tu lider podra revisar este recurso en el dashboard."
+    )
+
+    points_result = await award_patrol_points(
+        update.effective_chat.id,
+        event_type="youtube_mission",
+        external_ref=video_id,
+        metadata={"video_id": video_id, "raw_link": raw_link},
+    )
+    if points_result.get("awarded"):
+        await update.message.reply_text(
+            f"+500 puntos SEL por mision YouTube cumplida. Total: {points_result.get('sel_points', 0)}"
+        )
+    elif points_result.get("reason") == "already_awarded":
+        await update.message.reply_text(
+            "Ese video ya fue contado antes para esta patrulla."
+        )
+
+
+async def handle_voice_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    if not update.effective_chat or not update.message or not update.message.voice:
+        return
+
+    chat_id = update.effective_chat.id
+    patrol = await find_patrol_by_chat_id(chat_id)
+    if patrol is None:
+        await update.message.reply_text(
+            "Para enviar audio, primero vincula tu patrulla con /start."
+        )
+        return
+
+    await update.message.reply_text("Audio recibido. Estoy preparando la transcripcion...")
+
+    telegram_file = await context.bot.get_file(update.message.voice.file_id)
+    try:
+        media_paths = await download_and_convert_voice(
+            telegram_file=telegram_file,
+            chat_id=chat_id,
+            target_ext=os.getenv("VOICE_TARGET_FORMAT", "mp3"),
+        )
+    except RuntimeError:
+        await update.message.reply_text(
+            "No pude convertir el audio en este momento. Intenta de nuevo en unos minutos."
+        )
+        return
+
+    try:
+        stt_result = await _transcribe_voice_with_gemini(media_paths["converted_path"])
+    except ValueError:
+        await update.message.reply_text(
+            "No tengo configurada la clave de Gemini para transcribir audio."
+        )
+        return
+    except RuntimeError:
+        await update.message.reply_text(
+            "No pude transcribir el audio ahora. Intenta de nuevo en unos minutos."
+        )
+        return
+
+    transcript_text = str(stt_result.get("transcript_text") or "").strip()
+    pronunciation_score = int(stt_result.get("pronunciation_score") or 1)
+    should_repeat = bool(stt_result.get("should_repeat"))
+    feedback_message = str(stt_result.get("feedback_message") or "").strip()
+
+    if should_repeat or not transcript_text:
+        await update.message.reply_text(
+            "No logre entender bien tu audio. ¿Podrias repetirlo, por favor?"
+        )
+        if feedback_message:
+            await update.message.reply_text(f"Tutor fonetico: {feedback_message}")
+        return
+
+    await update.message.reply_text(
+        "Transcripcion:\n"
+        f"{transcript_text}\n\n"
+        f"Pronunciacion estimada (1-5): {pronunciation_score}"
+    )
+    if feedback_message:
+        await update.message.reply_text(f"Feedback fonetico: {feedback_message}")
+
+    validation = await _validate_linked_patrol_message(transcript_text)
+    if bool(validation.get("flagged")) or not bool(validation.get("comprehensible")):
+        await update.message.reply_text(
+            "Recibi la transcripcion, pero aun no cumple el criterio de muestra de exito."
+        )
+        return
+
+    storage_info = await asyncio.to_thread(
+        store_success_audio_sample,
+        Path(media_paths["converted_path"]),
+        patrol_id=patrol.get("id"),
+    )
+    await update.message.reply_text(
+        "Excelente trabajo. Tu audio se guardo como muestra de exito.\n"
+        f"Ubicacion: {storage_info.get('storage_path')}"
+    )
+    points_result = await award_patrol_points(
+        chat_id,
+        event_type="audio_validated",
+        external_ref=str(update.message.voice.file_id),
+        metadata={
+            "duration_seconds": update.message.voice.duration,
+            "pronunciation_score": pronunciation_score,
+            "storage_path": storage_info.get("storage_path"),
+        },
+    )
+    if points_result.get("awarded"):
+        await update.message.reply_text(
+            f"+50 puntos SEL por audio validado. Total: {points_result.get('sel_points', 0)}"
+        )
 
 
 async def cancel_registration(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
@@ -391,7 +554,9 @@ async def init_telegram_application() -> Application:
         )
 
         app.add_handler(CommandHandler("status", handle_status))
+        app.add_handler(CommandHandler("entregar", handle_entregar))
         app.add_handler(registration_handler)
+        app.add_handler(MessageHandler(filters.VOICE, handle_voice_message))
         app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_linked_text))
         await app.initialize()
         _telegram_app = app

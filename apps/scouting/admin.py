@@ -12,8 +12,10 @@ from apps.scouting.models import (
     Event,
     MatchCelebrationEvent,
     Mission,
+    Payment,
     Patrol,
     PatrolMatch,
+    PointLog,
     Submission,
 )
 
@@ -179,6 +181,7 @@ class PatrolAdmin(admin.ModelAdmin):
         "telegram_chat_id",
         "invitation_token",
         "training_points",
+        "sel_points",
         "leader_name",
         "is_active",
     )
@@ -247,6 +250,74 @@ class MatchCelebrationEventAdmin(admin.ModelAdmin):
         "first_interaction_at",
         "first_interaction_seconds",
     )
+
+
+@admin.register(PointLog)
+class PointLogAdmin(admin.ModelAdmin):
+    list_display = ("created_at", "patrol", "event_type", "points", "external_ref")
+    list_filter = ("event_type", "created_at")
+    search_fields = ("patrol__name", "patrol__delegation_name", "external_ref")
+    readonly_fields = ("created_at", "patrol", "event_type", "points", "external_ref", "metadata")
+
+
+@admin.register(Payment)
+class PaymentAdmin(admin.ModelAdmin):
+    list_display = (
+        "created_at",
+        "patrol",
+        "product_type",
+        "amount_display",
+        "status",
+        "payment_method",
+    )
+    list_filter = ("status", "payment_method", "product_type", "created_at")
+    search_fields = (
+        "patrol__name",
+        "patrol__delegation_name",
+        "stripe_payment_intent_id",
+        "paypal_transaction_id",
+    )
+    readonly_fields = (
+        "created_at",
+        "updated_at",
+        "completed_at",
+        "stripe_payment_intent_id",
+        "paypal_transaction_id",
+    )
+
+    fieldsets = (
+        (
+            "Información de Patrulla",
+            {"fields": ("patrol",)},
+        ),
+        (
+            "Detalles de Producto",
+            {"fields": ("product_type", "amount_cents", "currency")},
+        ),
+        (
+            "Estado de Pago",
+            {"fields": ("status", "payment_method", "completed_at", "error_message")},
+        ),
+        (
+            "Referencias de Proveedor",
+            {"fields": ("stripe_payment_intent_id", "paypal_transaction_id")},
+        ),
+        (
+            "Metadata",
+            {"fields": ("metadata",), "classes": ("collapse",)},
+        ),
+        (
+            "Timestamps",
+            {"fields": ("created_at", "updated_at"), "classes": ("collapse",)},
+        ),
+    )
+
+    def amount_display(self, obj: Payment) -> str:
+        return f"${obj.amount_cents / 100:.2f} {obj.currency}"
+    amount_display.short_description = "Monto"
+
+    def has_add_permission(self, request: HttpRequest) -> bool:
+        return False
 
 
 def _patch_admin_index() -> None:
