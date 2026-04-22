@@ -1,6 +1,7 @@
 from fastapi import APIRouter, HTTPException, status
 from pydantic import BaseModel
 
+from fastapi_app.db_bridge import build_weekly_report_for_patrol
 from fastapi_app.services.patrol_service import get_certification_qr_payload
 
 router = APIRouter(prefix="/gamification", tags=["gamification"])
@@ -12,6 +13,22 @@ class CertificationQRResponse(BaseModel):
     required_points: int | None = None
     qr_url: str | None = None
     payload: dict | None = None
+
+
+class WeeklyReportResponse(BaseModel):
+    patrol_name: str
+    delegation_name: str
+    leader_name: str
+    period_start: str
+    period_end: str
+    texts_validated: int
+    audios_validated: int
+    youtube_missions: int
+    consistency_bonuses: int
+    weekly_points: int
+    total_sel_points: int
+    estimated_words_learned: int
+    summary_message: str
 
 
 @router.get("/patrols/{patrol_id}/certification-qr", response_model=CertificationQRResponse)
@@ -34,3 +51,12 @@ async def certification_qr(patrol_id: int) -> CertificationQRResponse:
         qr_url=result.get("qr_url"),
         payload=result.get("payload"),
     )
+
+
+@router.get("/patrol/weekly-report/{chat_id}", response_model=WeeklyReportResponse)
+async def weekly_report(chat_id: int) -> WeeklyReportResponse:
+    """Weekly learning report for a patrol leader, identified by Telegram chat_id."""
+    result = await build_weekly_report_for_patrol(chat_id)
+    if not result.get("success"):
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Patrol not found")
+    return WeeklyReportResponse(**{k: v for k, v in result.items() if k != "success"})

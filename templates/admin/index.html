@@ -66,6 +66,43 @@
       color: #fff;
     }
 
+    .ranking-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 0.86rem;
+    }
+
+    .ranking-table th,
+    .ranking-table td {
+      border: 1px solid #d1fae5;
+      padding: 0.45rem 0.6rem;
+      text-align: left;
+      vertical-align: middle;
+    }
+
+    .ranking-table thead th {
+      background: #065f46;
+      color: #fff;
+    }
+
+    .ranking-table tbody tr:nth-child(odd) {
+      background: #ecfdf5;
+    }
+
+    .ranking-table tbody tr:nth-child(even) {
+      background: #fff;
+    }
+
+    .rank-medal {
+      font-weight: 700;
+      color: #065f46;
+    }
+
+    .weekly-up {
+      color: #059669;
+      font-size: 0.78rem;
+    }
+
     .empty-note {
       color: #4b5563;
       font-size: 0.85rem;
@@ -120,6 +157,42 @@
     </section>
 
     {% include "admin/app_list.html" with app_list=app_list show_changelinks=True %}
+
+    {% if scouting_global_ranking %}
+      <section style="margin-top:1.5rem">
+        <article class="analytics-card">
+          <h2 class="analytics-title">🏆 Ranking Global SEL — Top {{ scouting_global_ranking|length }} Patrullas</h2>
+          <table class="ranking-table">
+            <thead>
+              <tr>
+                <th>#</th>
+                <th>Patrulla</th>
+                <th>Delegación</th>
+                <th>País</th>
+                <th>Idioma</th>
+                <th>Evento</th>
+                <th>Puntos SEL</th>
+                <th>Pts esta semana</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for row in scouting_global_ranking %}
+                <tr>
+                  <td class="rank-medal">{{ row.rank }}</td>
+                  <td><a href="{{ row.change_url }}">{{ row.patrol_name }}</a></td>
+                  <td>{{ row.delegation_name }}</td>
+                  <td>{{ row.country_name }}</td>
+                  <td>{{ row.language }}</td>
+                  <td>{{ row.event_name }}</td>
+                  <td><strong>{{ row.sel_points }}</strong></td>
+                  <td class="weekly-up">+{{ row.weekly_points }}</td>
+                </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </article>
+      </section>
+    {% endif %}
   </div>
 
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js"></script>

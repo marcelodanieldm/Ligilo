@@ -1,8 +1,10 @@
 import json
 import uuid
+from datetime import timedelta
 
 from django.contrib import admin, messages
 from django.core.exceptions import ValidationError
+from django.db.models import Count, Sum
 from django.http import HttpRequest, JsonResponse
 from django.urls import path, reverse
 from django.utils import timezone
@@ -109,6 +111,89 @@ def _build_traffic_chart_payload() -> dict:
 
 def admin_traffic_chart_data(_request: HttpRequest) -> JsonResponse:
     return JsonResponse(_build_traffic_chart_payload())
+
+
+def _build_global_ranking_payload(event_id: int | None = None, limit: int = 20) -> list[dict]:
+    """Top patrols by SEL points, optionally filtered by event."""
+    qs = Patrol.objects.select_related("event").filter(is_active=True)
+    if event_id:
+        qs = qs.filter(event_id=event_id)
+    qs = qs.order_by("-sel_points")[:limit]
+
+    recent_window = timezone.now() - timedelta(days=7)
+    ranking = []
+    for rank, patrol in enumerate(qs, start=1):
+        weekly_pts = (
+            PointLog.objects.filter(patrol=patrol, created_at__gte=recent_window)
+            .aggregate(total=Sum("points"))
+            .get("total") or 0
+        )
+        ranking.append(
+            {
+                "rank": rank,
+                "patrol_id": patrol.id,
+                "patrol_name": patrol.name,
+                "delegation_name": patrol.delegation_name,
+                "country_name": patrol.country_name,
+                "country_code": patrol.country_code,
+                "language": patrol.official_language_name,
+                "event_name": patrol.event.name,
+                "sel_points": patrol.sel_points,
+                "weekly_points": weekly_pts,
+                "change_url": reverse("admin:scouting_patrol_change", args=[patrol.id]),
+            }
+        )
+    return ranking
+
+
+def admin_global_ranking_data(request: HttpRequest) -> JsonResponse:
+    try:
+        event_id = int(request.GET["event_id"]) if "event_id" in request.GET else None
+    except (TypeError, ValueError):
+        event_id = None
+    return JsonResponse({"ranking": _build_global_ranking_payload(event_id=event_id)})
+
+
+def _build_weekly_report_payload(patrol_id: int) -> dict:
+    """Build the weekly learning report for a patrol (admin preview endpoint)."""
+    patrol = Patrol.objects.filter(id=patrol_id).first()
+    if patrol is None:
+        return {"error": "patrol_not_found"}
+
+    week_start = timezone.now() - timedelta(days=7)
+    logs = PointLog.objects.filter(patrol=patrol, created_at__gte=week_start)
+
+    texts = logs.filter(event_type=PointLog.EventType.TEXT_VALIDATED).count()
+    audios = logs.filter(event_type=PointLog.EventType.AUDIO_VALIDATED).count()
+    youtube = logs.filter(event_type=PointLog.EventType.YOUTUBE_MISSION).count()
+    bonuses = logs.filter(event_type=PointLog.EventType.CONSISTENCY_BONUS).count()
+    weekly_points = logs.aggregate(total=Sum("points")).get("total") or 0
+    estimated_words = (texts * 1) + (audios * 3) + (youtube * 5)
+
+    return {
+        "patrol_id": patrol.id,
+        "patrol_name": patrol.name,
+        "delegation_name": patrol.delegation_name,
+        "leader_name": patrol.leader_name,
+        "period_start": week_start.strftime("%d/%m/%Y"),
+        "period_end": timezone.now().strftime("%d/%m/%Y"),
+        "texts_validated": texts,
+        "audios_validated": audios,
+        "youtube_missions": youtube,
+        "consistency_bonuses": bonuses,
+        "weekly_points": weekly_points,
+        "total_sel_points": patrol.sel_points,
+        "estimated_words_learned": estimated_words,
+        "summary_message": (
+            f"Tu patrulla ha aprendido {estimated_words} palabras nuevas esta semana. "
+            f"Enviaste {texts} frases, {audios} audios y completaste {youtube} misiones YouTube. "
+            f"Ganaron {weekly_points} puntos SEL esta semana."
+        ),
+    }
+
+
+def admin_weekly_report_data(_request: HttpRequest, patrol_id: int) -> JsonResponse:
+    return JsonResponse(_build_weekly_report_payload(patrol_id))
 
 
 class MissionInline(admin.TabularInline):
@@ -330,9 +415,12 @@ def _patch_admin_index() -> None:
     def ligilo_each_context(request: HttpRequest) -> dict:
         context = original_each_context(request)
         alerts = _build_security_alert_rows(limit=25)
+        ranking = _build_global_ranking_payload(limit=20)
         context.update(
             {
                 "scouting_traffic_chart_url": reverse("admin:scouting_traffic_data"),
+                "scouting_global_ranking_url": reverse("admin:scouting_global_ranking"),
+                "scouting_global_ranking": ranking,
                 "scouting_security_alerts": alerts,
                 "scouting_security_alert_total": len(alerts),
             }
@@ -345,7 +433,17 @@ def _patch_admin_index() -> None:
                 "analytics/traffic-chart-data/",
                 admin.site.admin_view(admin_traffic_chart_data),
                 name="scouting_traffic_data",
-            )
+            ),
+            path(
+                "analytics/global-ranking/",
+                admin.site.admin_view(admin_global_ranking_data),
+                name="scouting_global_ranking",
+            ),
+            path(
+                "analytics/weekly-report/<int:patrol_id>/",
+                admin.site.admin_view(admin_weekly_report_data),
+                name="scouting_weekly_report",
+            ),
         ]
         return extra_urls + original_get_urls()
 

@@ -8,9 +8,7 @@ import django
 from asgiref.sync import sync_to_async
 from django.contrib.auth import get_user_model
 from django.db import transaction
-from django.db.models import F
-from django.db.models import Q
-from django.db.models import Sum
+from django.db.models import Count, F, Q, Sum
 from django.utils import timezone
 
 
@@ -309,7 +307,39 @@ def award_points_by_chat(
         Patrol.objects.filter(pk=patrol.pk).update(sel_points=F("sel_points") + points)
 
     patrol.refresh_from_db(fields=["sel_points"])
-    return {"awarded": True, "reason": "ok", "points": points, "sel_points": patrol.sel_points}
+    result = {"awarded": True, "reason": "ok", "points": points, "sel_points": patrol.sel_points}
+
+    # Check for consistency bonus: 3 audio submissions in the last 24 hours
+    if event_type == PointLog.EventType.AUDIO_VALIDATED:
+        window_start = timezone.now() - timedelta(hours=24)
+        recent_audio_count = PointLog.objects.filter(
+            patrol=patrol,
+            event_type=PointLog.EventType.AUDIO_VALIDATED,
+            created_at__gte=window_start,
+        ).count()
+
+        if recent_audio_count == 3:
+            bonus_points = POINT_RULES[PointLog.EventType.AUDIO_VALIDATED] * 2  # 2x bonus = 100 pts
+            already_bonus = PointLog.objects.filter(
+                patrol=patrol,
+                event_type=PointLog.EventType.CONSISTENCY_BONUS,
+                created_at__gte=window_start,
+            ).exists()
+            if not already_bonus:
+                with transaction.atomic():
+                    PointLog.objects.create(
+                        patrol=patrol,
+                        event_type=PointLog.EventType.CONSISTENCY_BONUS,
+                        points=bonus_points,
+                        multiplier="2.00",
+                        metadata={"trigger": "3_audios_in_24h", "window_start": window_start.isoformat()},
+                    )
+                    Patrol.objects.filter(pk=patrol.pk).update(sel_points=F("sel_points") + bonus_points)
+                patrol.refresh_from_db(fields=["sel_points"])
+                result["consistency_bonus"] = {"awarded": True, "bonus_points": bonus_points}
+                result["sel_points"] = patrol.sel_points
+
+    return result
 
 
 @sync_to_async
@@ -459,3 +489,90 @@ def get_patrol_payments(patrol_id: int) -> list[dict]:
         }
         for p in payments
     ]
+
+
+@sync_to_async
+def build_weekly_report_for_patrol(chat_id: int) -> dict:
+    """
+    Build the weekly learning report payload for a patrol leader.
+    Covers the last 7 days of activity:
+      - text messages validated
+      - audios validated
+      - YouTube missions completed
+      - consistency bonuses earned
+      - SEL points earned this week
+      - estimated new Esperanto words practiced (1 text=1 word, 1 audio=3 words)
+    """
+    patrol = Patrol.objects.filter(telegram_chat_id=chat_id).first()
+    if patrol is None:
+        return {"success": False, "error": "patrol_not_found"}
+
+    week_start = timezone.now() - timedelta(days=7)
+    logs = PointLog.objects.filter(patrol=patrol, created_at__gte=week_start)
+
+    texts = logs.filter(event_type=PointLog.EventType.TEXT_VALIDATED).count()
+    audios = logs.filter(event_type=PointLog.EventType.AUDIO_VALIDATED).count()
+    youtube = logs.filter(event_type=PointLog.EventType.YOUTUBE_MISSION).count()
+    bonuses = logs.filter(event_type=PointLog.EventType.CONSISTENCY_BONUS).count()
+    weekly_points = logs.aggregate(total=Sum("points")).get("total") or 0
+
+    # Estimated word practice: each validated text ~ 1 word, each audio ~ 3 words
+    estimated_words = (texts * 1) + (audios * 3) + (youtube * 5)
+
+    return {
+        "success": True,
+        "patrol_name": patrol.name,
+        "delegation_name": patrol.delegation_name,
+        "leader_name": patrol.leader_name,
+        "period_start": week_start.strftime("%d/%m/%Y"),
+        "period_end": timezone.now().strftime("%d/%m/%Y"),
+        "texts_validated": texts,
+        "audios_validated": audios,
+        "youtube_missions": youtube,
+        "consistency_bonuses": bonuses,
+        "weekly_points": weekly_points,
+        "total_sel_points": patrol.sel_points,
+        "estimated_words_learned": estimated_words,
+        "summary_message": (
+            f"Tu patrulla ha aprendido {estimated_words} palabras nuevas esta semana. "
+            f"Enviaste {texts} frases, {audios} audios y completaste {youtube} misiones YouTube. "
+            f"Ganaron {weekly_points} puntos SEL esta semana."
+        ),
+    }
+
+
+def build_global_ranking(event_id: int | None = None, limit: int = 20) -> list[dict]:
+    """
+    Build the global ranking of patrols ordered by sel_points descending.
+    Optionally scoped to a single event.
+    Returns a list of dicts ready for admin display.
+    """
+    qs = Patrol.objects.select_related("event").filter(is_active=True)
+    if event_id:
+        qs = qs.filter(event_id=event_id)
+
+    qs = qs.order_by("-sel_points")[:limit]
+
+    ranking = []
+    for rank, patrol in enumerate(qs, start=1):
+        recent_window = timezone.now() - timedelta(days=7)
+        weekly_pts = (
+            PointLog.objects.filter(patrol=patrol, created_at__gte=recent_window)
+            .aggregate(total=Sum("points"))
+            .get("total") or 0
+        )
+        ranking.append(
+            {
+                "rank": rank,
+                "patrol_id": patrol.id,
+                "patrol_name": patrol.name,
+                "delegation_name": patrol.delegation_name,
+                "country_name": patrol.country_name,
+                "country_code": patrol.country_code,
+                "language": patrol.official_language_name,
+                "event_name": patrol.event.name,
+                "sel_points": patrol.sel_points,
+                "weekly_points": weekly_pts,
+            }
+        )
+    return ranking

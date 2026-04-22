@@ -269,11 +269,13 @@ class PointLog(models.Model):
         TEXT_VALIDATED = "text_validated", "Mensaje de texto validado"
         AUDIO_VALIDATED = "audio_validated", "Audio validado"
         YOUTUBE_MISSION = "youtube_mission", "Video de YouTube (Mision cumplida)"
+        CONSISTENCY_BONUS = "consistency_bonus", "Bono de Consistencia (3 audios en 24h)"
 
     patrol = models.ForeignKey(Patrol, on_delete=models.CASCADE, related_name="point_logs")
     event_type = models.CharField(max_length=40, choices=EventType.choices)
     points = models.PositiveIntegerField()
     external_ref = models.CharField(max_length=120, blank=True)
+    multiplier = models.DecimalField(max_digits=4, decimal_places=2, default=1.00)
     metadata = models.JSONField(default=dict)
     created_at = models.DateTimeField(auto_now_add=True)
 
