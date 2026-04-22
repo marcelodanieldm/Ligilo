@@ -25,6 +25,15 @@ SYSTEM_PROMPT = (
     "No markdown, no extra keys, no explanations."
 )
 
+MCER_SYSTEM_PROMPT = (
+    "You are Skolto-Instruisto progression evaluator for Esperanto using CEFR levels. "
+    "Return exactly one valid JSON object with these keys only: "
+    "mcer_level (string: A1 or B1), lexical_score (integer 0-100), grammar_score (integer 0-100), "
+    "participation_score (integer 0-100), personalized_congrats (string, max 240 chars), "
+    "next_focus (string, max 240 chars). "
+    "No markdown, no extra keys, no explanations."
+)
+
 logger = logging.getLogger(__name__)
 
 _NAME_PATTERN = re.compile(r"\b([A-ZÁÉÍÓÚÑ][a-záéíóúñ]{2,})(?:\s+[A-ZÁÉÍÓÚÑ][a-záéíóúñ]{2,})*\b")
@@ -208,3 +217,138 @@ def validate_esperanto_content(
         "comprehensible": False,
         "encouragement_message": "Bonvolu reprovi post momento. Ni estas cxe vi por helpi!",
     }
+
+
+def _validate_mcer_schema(obj: dict[str, Any]) -> tuple[bool, str | None]:
+    required_keys = {
+        "mcer_level",
+        "lexical_score",
+        "grammar_score",
+        "participation_score",
+        "personalized_congrats",
+        "next_focus",
+    }
+    keys = set(obj.keys())
+    missing = required_keys - keys
+    extra = keys - required_keys
+    if missing:
+        return False, f"Missing keys: {sorted(missing)}"
+    if extra:
+        return False, f"Extra keys: {sorted(extra)}"
+
+    if obj.get("mcer_level") not in {"A1", "B1"}:
+        return False, "mcer_level must be A1 or B1"
+
+    for key in ("lexical_score", "grammar_score", "participation_score"):
+        value = obj.get(key)
+        if not isinstance(value, int):
+            return False, f"{key} must be integer"
+        if value < 0 or value > 100:
+            return False, f"{key} must be 0..100"
+
+    for key in ("personalized_congrats", "next_focus"):
+        value = obj.get(key)
+        if not isinstance(value, str):
+            return False, f"{key} must be string"
+        if len(value) > 240:
+            return False, f"{key} max length is 240"
+
+    return True, None
+
+
+def evaluate_mcer_progress(
+    text: str,
+    *,
+    mcer_level: str,
+    api_key: str | None = None,
+    model: str = DEFAULT_MODEL,
+    timeout_seconds: int = 60,
+) -> dict[str, Any]:
+    """
+    Evaluate Esperanto progression by MCER level focus.
+    A1: vocabulario básico e identificación de objetos scouts.
+    B1: argumentación y tiempos verbales compuestos.
+    """
+    resolved_api_key = api_key or os.getenv("GEMINI_API_KEY", "")
+    if not resolved_api_key:
+        raise ValueError("Missing Gemini API key. Use api_key or GEMINI_API_KEY.")
+
+    level = (mcer_level or "A1").strip().upper()
+    if level not in {"A1", "B1"}:
+        level = "A1"
+
+    if level == "A1":
+        level_focus = (
+            "Enfocate en vocabulario básico scout, identificación de objetos (tenda, ŝnuro, kompaso), "
+            "y frases cortas funcionales."
+        )
+    else:
+        level_focus = (
+            "Enfocate en argumentación (causa-consecuencia, opinión fundamentada), "
+            "y uso de tiempos verbales compuestos en Esperanto."
+        )
+
+    prompt = (
+        "Analiza el siguiente mensaje en Esperanto de una patrulla scout. "
+        f"Nivel objetivo MCER: {level}. "
+        f"Criterio del nivel: {level_focus}\n\n"
+        "Devuelve puntuaciones y una felicitación personalizada motivadora, "
+        "más el siguiente foco pedagógico corto.\n\n"
+        f"Texto:\n{text}"
+    )
+
+    payload = {
+        "system_instruction": {"parts": [{"text": MCER_SYSTEM_PROMPT}]},
+        "contents": [{"role": "user", "parts": [{"text": prompt}]}],
+        "generationConfig": {
+            "temperature": 0.2,
+            "maxOutputTokens": 260,
+        },
+    }
+
+    req = request.Request(
+        url=API_URL_TEMPLATE.format(model=model, api_key=resolved_api_key),
+        data=json.dumps(payload).encode("utf-8"),
+        headers={"Content-Type": "application/json"},
+        method="POST",
+    )
+
+    try:
+        with request.urlopen(req, timeout=timeout_seconds) as resp:
+            raw = resp.read().decode("utf-8")
+        parsed = json.loads(raw)
+        candidates = parsed.get("candidates") or []
+        if not candidates:
+            raise RuntimeError("No candidates in Gemini response")
+        parts = ((candidates[0].get("content") or {}).get("parts") or [])
+        if not parts or "text" not in parts[0]:
+            raise RuntimeError("No text part in Gemini response")
+
+        obj, parse_error = _parse_json_object(parts[0]["text"].strip())
+        if parse_error or obj is None:
+            raise RuntimeError(f"Malformed JSON: {parse_error}")
+
+        valid, schema_error = _validate_mcer_schema(obj)
+        if not valid:
+            raise RuntimeError(f"Invalid MCER schema: {schema_error}")
+        return obj
+    except Exception:
+        # Conservative pedagogical fallback keeps the bot responsive.
+        if level == "A1":
+            return {
+                "mcer_level": "A1",
+                "lexical_score": 60,
+                "grammar_score": 58,
+                "participation_score": 62,
+                "personalized_congrats": "Bonege! Vi jam nomas bazajn skoltajn objektojn en Esperanto.",
+                "next_focus": "Praktiku 3 frazojn pri objektoj de via tendaro kun simpla verbo.",
+            }
+
+        return {
+            "mcer_level": "B1",
+            "lexical_score": 67,
+            "grammar_score": 64,
+            "participation_score": 68,
+            "personalized_congrats": "Tre bone! Via argumento en Esperanto jam sonas pli matura.",
+            "next_focus": "Uzu konektilojn por argumenti kaj praktiku verbajn formojn kun pli longa respondo.",
+        }

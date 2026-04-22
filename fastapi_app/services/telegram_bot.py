@@ -2,6 +2,7 @@ import asyncio
 import os
 from pathlib import Path
 
+from django.core.mail import send_mail
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update
 from telegram.constants import ParseMode
 from telegram.ext import (
@@ -16,17 +17,21 @@ from telegram.ext import (
 )
 
 from fastapi_app.services.audio_stt_validator import transcribe_and_score_audio
-from fastapi_app.services.gemini_seed_validator import validate_esperanto_content
+from fastapi_app.services.gemini_seed_validator import evaluate_mcer_progress, validate_esperanto_content
 from fastapi_app.services.media_storage import store_success_audio_sample
 from fastapi_app.services.patrol_service import (
     award_patrol_points,
     bind_chat_with_invitation_token,
+    create_rover_incident,
+    create_youtube_submission_by_chat,
     find_patrol_by_chat_id,
     get_match_celebration_payloads,
     get_scout_registration_status,
     increase_training_points,
     mark_match_celebration_interaction,
 )
+from fastapi_app.services.youtube_validator import validate_youtube_video
+from fastapi_app.services.video_auditor import audit_video_esperanto
 from fastapi_app.services.training_tutor import generate_training_tutor_reply
 from fastapi_app.services.voice_pipeline import (
     download_and_convert_voice,
@@ -89,6 +94,44 @@ def _build_success_validation_message(encouragement_message: str) -> str:
     )
 
 
+def _build_rover_incident_markup() -> InlineKeyboardMarkup:
+    return InlineKeyboardMarkup(
+        [
+            [InlineKeyboardButton("🚨 Seguridad", callback_data="rover_incident:Seguridad en actividad")],
+            [InlineKeyboardButton("🛠️ Plataforma", callback_data="rover_incident:Fallo en plataforma o bot")],
+            [InlineKeyboardButton("⚠️ Conducta", callback_data="rover_incident:Conducta inadecuada observada")],
+        ]
+    )
+
+
+async def _notify_leader_for_final_approval(
+    *,
+    patrol_name: str,
+    delegation_name: str,
+    leader_email: str,
+    review_url: str,
+) -> None:
+    if not leader_email:
+        return
+
+    subject = f"Ligilo: {patrol_name} requiere tu 'Siempre Listos'"
+    body = (
+        f"La patrulla {patrol_name} ({delegation_name}) ha completado su video de YouTube.\n\n"
+        "La IA ya terminó la validación técnica y auditoría inicial.\n"
+        "Ahora debes realizar la aprobación final humana según política WOSM.\n\n"
+        "Haz clic aquí para dar tu 'Siempre Listos':\n"
+        f"{review_url}\n"
+    )
+    await asyncio.to_thread(
+        send_mail,
+        subject,
+        body,
+        os.getenv("DEFAULT_FROM_EMAIL", "no-reply@ligilo.local"),
+        [leader_email],
+        False,
+    )
+
+
 def _build_flagged_message() -> str:
     return (
         "⚠️ *Mensaje bloqueado por seguridad*\n\n"
@@ -140,6 +183,20 @@ async def _send_match_cards_to_patrols(context: ContextTypes.DEFAULT_TYPE, chat_
 
 async def _validate_linked_patrol_message(text: str) -> dict[str, object]:
     return await asyncio.to_thread(validate_esperanto_content, text)
+
+
+def _resolve_mcer_level(sel_points: int) -> str:
+    # Operational rule for sprint: A1 before 1000 pts, B1 from 1000+ pts.
+    return "B1" if sel_points >= 1000 else "A1"
+
+
+async def _evaluate_mcer_message(text: str, sel_points: int) -> dict[str, object]:
+    level = _resolve_mcer_level(sel_points)
+    return await asyncio.to_thread(
+        evaluate_mcer_progress,
+        text,
+        mcer_level=level,
+    )
 
 
 async def _generate_tutor_message(text: str) -> str:
@@ -332,6 +389,22 @@ async def handle_linked_text(update: Update, context: ContextTypes.DEFAULT_TYPE)
         await update.message.reply_text(
             f"+10 puntos SEL por mensaje validado. Total: {points_result.get('sel_points', 0)}"
         )
+        try:
+            mcer = await _evaluate_mcer_message(
+                incoming_text,
+                int(points_result.get("sel_points") or patrol.get("sel_points") or 0),
+            )
+            await update.message.reply_text(
+                "🎓 Skolto-Instruisto (MCER)\n"
+                f"Nivel: {mcer.get('mcer_level')}\n"
+                f"Lexiko: {mcer.get('lexical_score')}/100 | Gramatiko: {mcer.get('grammar_score')}/100\n"
+                f"Partopreno: {mcer.get('participation_score')}/100\n\n"
+                f"{mcer.get('personalized_congrats')}\n"
+                f"Siguiente foco: {mcer.get('next_focus')}"
+            )
+        except Exception:
+            # Keep mission flow resilient if pedagogical scoring fails.
+            pass
 
 
 async def handle_status(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -402,26 +475,119 @@ async def handle_entregar(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
         )
         return
 
-    await update.message.reply_text(
-        "Entrega registrada.\n"
-        f"video_id: {video_id}\n"
-        "Tu lider podra revisar este recurso en el dashboard."
+    await update.message.reply_text("Recibi tu video. Validando metadata de YouTube...")
+    validation = validate_youtube_video(raw_link, patrol_name=str(patrol.get("name") or ""))
+    if not validation.get("valid"):
+        errors = validation.get("errors") or ["No paso validacion de YouTube."]
+        await update.message.reply_text(
+            "No pude aceptar la entrega por ahora:\n- " + "\n- ".join(str(e) for e in errors)
+        )
+        return
+
+    await update.message.reply_text("Metadata OK. Ejecutando auditoria IA del video...")
+    audit = await audit_video_esperanto(
+        video_url=raw_link,
+        video_id=validation.get("video_id") or video_id,
+        patrol_name=str(patrol.get("name") or ""),
     )
 
-    points_result = await award_patrol_points(
+    submission_result = await create_youtube_submission_by_chat(
         update.effective_chat.id,
-        event_type="youtube_mission",
-        external_ref=video_id,
-        metadata={"video_id": video_id, "raw_link": raw_link},
+        youtube_url=raw_link,
+        validation_result=validation,
+        audit_result=audit,
     )
-    if points_result.get("awarded"):
+    if not submission_result.get("ok"):
+        await update.message.reply_text("No pude guardar la entrega. Intenta de nuevo en unos minutos.")
+        return
+
+    if not audit.get("audit_valid"):
         await update.message.reply_text(
-            f"+500 puntos SEL por mision YouTube cumplida. Total: {points_result.get('sel_points', 0)}"
+            "La auditoria IA marco esta entrega para revision adicional. "
+            "Tu lider la evaluara manualmente antes de aprobarla."
         )
-    elif points_result.get("reason") == "already_awarded":
+        return
+
+    leader_email = submission_result.get("leader_email") or "(sin email de lider)"
+    review_url = submission_result.get("leader_review_url") or ""
+    if submission_result.get("leader_approval_required") and review_url:
+        try:
+            await _notify_leader_for_final_approval(
+                patrol_name=str(patrol.get("name") or "Patrulla"),
+                delegation_name=str(patrol.get("delegation_name") or "Delegación"),
+                leader_email=str(submission_result.get("leader_email") or ""),
+                review_url=review_url,
+            )
+        except Exception:
+            # We keep bot flow resilient even if email delivery fails.
+            pass
+
+    await update.message.reply_text(
+        "¡Entrega registrada y validada por IA!\n"
+        "Ahora falta la validacion humana final del lider (Siempre Listos).\n\n"
+        f"Notificacion enviada a: {leader_email}\n"
+        f"Enlace de aprobacion: {review_url}"
+    )
+
+
+async def handle_reportar_incidencia(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    if not update.effective_chat or not update.message:
+        return
+
+    patrol = await find_patrol_by_chat_id(update.effective_chat.id)
+    if patrol is None:
+        await update.message.reply_text("Antes de reportar, vincula tu patrulla con /start.")
+        return
+
+    if not patrol.get("is_rover_moderator"):
         await update.message.reply_text(
-            "Ese video ya fue contado antes para esta patrulla."
+            "Este canal prioritario es exclusivo para Modo Rover (18+). "
+            "Si necesitas ayuda, usa /status o contacta a tu lider."
         )
+        return
+
+    manual_text = " ".join(context.args).strip() if context.args else ""
+    if manual_text:
+        result = await create_rover_incident(update.effective_chat.id, description=manual_text)
+        if result.get("ok"):
+            await update.message.reply_text(
+                f"Incidencia prioritaria registrada (#{result.get('incident_id')}). "
+                "El equipo de lideres la revisara de inmediato."
+            )
+        else:
+            await update.message.reply_text("No pude registrar la incidencia. Intenta nuevamente.")
+        return
+
+    await update.message.reply_text(
+        "Modo Rover activo: selecciona tipo de incidencia prioritaria o envia texto directo con /reportar_incidencia <detalle>",
+        reply_markup=_build_rover_incident_markup(),
+    )
+
+
+async def handle_rover_incident_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    if not update.callback_query:
+        return
+
+    query = update.callback_query
+    payload = query.data or ""
+    if not payload.startswith("rover_incident:"):
+        return
+
+    description = payload.split(":", 1)[1].strip()
+    chat_id = query.message.chat_id if query.message else None
+    if chat_id is None:
+        await query.answer("No se pudo determinar el chat", show_alert=True)
+        return
+
+    result = await create_rover_incident(chat_id, description=description)
+    if not result.get("ok"):
+        await query.answer("No se pudo registrar la incidencia", show_alert=True)
+        return
+
+    await query.answer("Incidencia prioritaria enviada", show_alert=False)
+    await query.edit_message_text(
+        f"Incidencia prioritaria registrada (#{result.get('incident_id')}). Lideres notificados."
+    )
 
 
 async def handle_voice_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -515,6 +681,21 @@ async def handle_voice_message(update: Update, context: ContextTypes.DEFAULT_TYP
         await update.message.reply_text(
             f"+50 puntos SEL por audio validado. Total: {points_result.get('sel_points', 0)}"
         )
+        try:
+            mcer = await _evaluate_mcer_message(
+                transcript_text,
+                int(points_result.get("sel_points") or patrol.get("sel_points") or 0),
+            )
+            await update.message.reply_text(
+                "🎓 Skolto-Instruisto (MCER)\n"
+                f"Nivel: {mcer.get('mcer_level')}\n"
+                f"Lexiko: {mcer.get('lexical_score')}/100 | Gramatiko: {mcer.get('grammar_score')}/100\n"
+                f"Partopreno: {mcer.get('participation_score')}/100\n\n"
+                f"{mcer.get('personalized_congrats')}\n"
+                f"Siguiente foco: {mcer.get('next_focus')}"
+            )
+        except Exception:
+            pass
         # Sprint 2: Notify sister patrol about the audio
         await notify_sister_patrol_on_audio(update, patrol.get("id"))
         
@@ -576,9 +757,11 @@ async def init_telegram_application() -> Application:
 
         app.add_handler(CommandHandler("status", handle_status))
         app.add_handler(CommandHandler("entregar", handle_entregar))
+        app.add_handler(CommandHandler("reportar_incidencia", handle_reportar_incidencia))
         app.add_handler(CommandHandler("miaj_punktoj", handle_miaj_punktoj))
         app.add_handler(CommandHandler("pagi", handle_pagi))
         app.add_handler(CallbackQueryHandler(handle_payment_callback, pattern=r"^payment:"))
+        app.add_handler(CallbackQueryHandler(handle_rover_incident_callback, pattern=r"^rover_incident:"))
         app.add_handler(registration_handler)
         app.add_handler(MessageHandler(filters.VOICE, handle_voice_message))
         app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_linked_text))

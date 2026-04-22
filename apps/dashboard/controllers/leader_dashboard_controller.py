@@ -1,4 +1,5 @@
 from dataclasses import asdict
+from datetime import timedelta
 
 from django.db.models import Count, Max, Q
 from django.utils import timezone
@@ -15,7 +16,7 @@ from apps.dashboard.models import (
     PatrolCertificate,
     StatCard,
 )
-from apps.scouting.models import Event, Patrol, Submission
+from apps.scouting.models import Event, Patrol, PatrolYouTubeSubmission, PointLog, Submission
 
 
 class LeaderDashboardController:
@@ -37,6 +38,42 @@ class LeaderDashboardController:
         "UK",  # Ukraina
         "IT",  # Itala
     ]
+
+    def _build_group_participation_metrics(self) -> dict:
+        now = timezone.now()
+        window_start = now - timedelta(days=2)
+
+        recent_logs = PointLog.objects.filter(created_at__gte=window_start)
+        active_patrol_ids = list(
+            recent_logs.values_list("patrol_id", flat=True).distinct()
+        )
+
+        active_patrols = Patrol.objects.filter(id__in=active_patrol_ids).count()
+        text_count = recent_logs.filter(event_type=PointLog.EventType.TEXT_VALIDATED).count()
+        audio_count = recent_logs.filter(event_type=PointLog.EventType.AUDIO_VALIDATED).count()
+        yt_count = recent_logs.filter(event_type=PointLog.EventType.YOUTUBE_MISSION).count()
+
+        recent_youtube = PatrolYouTubeSubmission.objects.filter(audited_at__gte=window_start)
+        teamwork_votes = 0
+        teamwork_total = 0
+        for submission in recent_youtube:
+            findings = submission.audit_findings or {}
+            has_teamwork = findings.get("has_teamwork")
+            if isinstance(has_teamwork, bool):
+                teamwork_total += 1
+                teamwork_votes += 1 if has_teamwork else 0
+
+        teamwork_pct = int((teamwork_votes * 100 / teamwork_total)) if teamwork_total else 0
+
+        return {
+            "window_label": f"{window_start.strftime('%d/%m')} - {now.strftime('%d/%m')}",
+            "active_patrols": active_patrols,
+            "text_count": text_count,
+            "audio_count": audio_count,
+            "yt_count": yt_count,
+            "teamwork_pct": teamwork_pct,
+            "last_update_note": "Actualizado cada 2 dias (ventana movil).",
+        }
 
     def _build_certificate(self) -> PatrolCertificate:
         active_event = Event.objects.filter(is_active=True).order_by("-starts_at").first()
@@ -125,6 +162,7 @@ class LeaderDashboardController:
 
     def get_context(self) -> dict:
         certificate = self._build_certificate()
+        participation = self._build_group_participation_metrics()
         page_model = DashboardPageModel(
             lang="es",
             leader=LeaderIdentity(initial="L"),
@@ -140,8 +178,8 @@ class LeaderDashboardController:
                     "Modo ligero activado. El panel prioriza texto, iconos simples y colas "
                     "sincronizables para conexiones lentas."
                 ),
-                last_sync="Hace 42 s",
-                pending_messages="12",
+                last_sync=participation["window_label"],
+                pending_messages=str(participation["active_patrols"]),
             ),
             hero_copy=(
                 "Supervisa el onboarding del bot, asigna misiones y detecta patrullas sin "
@@ -150,8 +188,8 @@ class LeaderDashboardController:
             stats=[
                 StatCard(
                     label="Scouts activos",
-                    value="128",
-                    caption="94% completo en onboarding",
+                    value=str(participation["active_patrols"]),
+                    caption="Patrullas activas en la ventana de 2 dias",
                     tone="bg-canvas",
                 ),
                 StatCard(
@@ -161,9 +199,12 @@ class LeaderDashboardController:
                     tone="bg-fog",
                 ),
                 StatCard(
-                    label="Misiones urgentes",
-                    value="07",
-                    caption="2 esperan confirmacion",
+                    label="Participacion grupal (2 dias)",
+                    value=f"{participation['teamwork_pct']}%",
+                    caption=(
+                        f"Textos {participation['text_count']} · Audios {participation['audio_count']} · "
+                        f"YouTube {participation['yt_count']}"
+                    ),
                     tone="bg-white",
                     emphasis="warn",
                 ),
@@ -215,13 +256,13 @@ class LeaderDashboardController:
             ),
             tasks=[
                 LeaderTask(
-                    title="Revisar scouts sin idioma confirmado",
+                    title="Seguimiento de participación grupal",
                     description=(
-                        "13 usuarios entraron por enlace compartido y no terminaron la "
-                        "seleccion entre 15 idiomas disponibles."
+                        f"Corte {participation['window_label']}: teamwork en video {participation['teamwork_pct']}%. "
+                        f"{participation['last_update_note']}"
                     ),
-                    tag="Prioridad alta",
-                    tag_tone="bark",
+                    tag="Cada 2 dias",
+                    tag_tone="moss",
                 ),
                 LeaderTask(
                     title="Reenviar mision a patrulla Norte",
