@@ -26,9 +26,11 @@ from fastapi_app.services.patrol_service import (
     create_youtube_submission_by_chat,
     find_patrol_by_chat_id,
     get_match_celebration_payloads,
+    get_mcer_certificate,
     get_scout_registration_status,
     increase_training_points,
     mark_match_celebration_interaction,
+    notify_leader_about_certificate,
 )
 from fastapi_app.services.youtube_validator import validate_youtube_video
 from fastapi_app.services.video_auditor import audit_video_esperanto
@@ -132,6 +134,66 @@ async def _notify_leader_for_final_approval(
     )
 
 
+async def _notify_sel_patch_preparation(
+    *,
+    patrol_name: str,
+    delegation_name: str,
+    effective_score: int,
+) -> None:
+    target = os.getenv("SEL_PATCH_PREP_EMAIL", "operations@sel.local")
+    subject = f"SEL Patch Prep: {patrol_name} alcanzó B1"
+    body = (
+        f"La patrulla {patrol_name} ({delegation_name}) alcanzó nivel B1 en PoentaroEngine.\n"
+        f"Puntaje compuesto actual: {effective_score}.\n\n"
+        "Acción requerida: preparar logística de parche físico para stand SEL."
+    )
+    await asyncio.to_thread(
+        send_mail,
+        subject,
+        body,
+        os.getenv("DEFAULT_FROM_EMAIL", "no-reply@ligilo.local"),
+        [target],
+        False,
+    )
+
+
+async def _send_poentaro_milestone_messages(
+    update: Update,
+    patrol: dict,
+    points_result: dict,
+) -> None:
+    milestones = list(points_result.get("mcer_milestones") or [])
+    if not milestones:
+        return
+
+    if "A1" in milestones:
+        await update.message.reply_text(
+            "🌟 ¡Ánimo, patrulla! Superaron el umbral A1. "
+            "Van por gran camino en vocabulario scout y comunicación básica."
+        )
+
+    if "A2" in milestones:
+        await update.message.reply_text(
+            "🎉 ¡Felicitaciones! Alcanzaron nivel A2. "
+            "Su interacción en Esperanto ya es funcional y consistente en equipo."
+        )
+
+    if "B1" in milestones:
+        await update.message.reply_text(
+            "🏅 ¡Excelente! Alcanzaron nivel B1. "
+            "Ya notificamos automáticamente a la SEL para la preparación del parche físico."
+        )
+        poentaro = points_result.get("poentaro") or {}
+        try:
+            await _notify_sel_patch_preparation(
+                patrol_name=str(patrol.get("name") or "Patrulla"),
+                delegation_name=str(patrol.get("delegation_name") or "Delegación"),
+                effective_score=int(poentaro.get("effective_score") or 0),
+            )
+        except Exception:
+            pass
+
+
 def _build_flagged_message() -> str:
     return (
         "⚠️ *Mensaje bloqueado por seguridad*\n\n"
@@ -186,8 +248,15 @@ async def _validate_linked_patrol_message(text: str) -> dict[str, object]:
 
 
 def _resolve_mcer_level(sel_points: int) -> str:
-    # Operational rule for sprint: A1 before 1000 pts, B1 from 1000+ pts.
-    return "B1" if sel_points >= 1000 else "A1"
+    # Definitive SEL thresholds:
+    # A1 0-1000, A2 1001-3000, B1 3001-6000, B2 6001+
+    if sel_points >= 6001:
+        return "B2"
+    if sel_points >= 3001:
+        return "B1"
+    if sel_points >= 1001:
+        return "A2"
+    return "A1"
 
 
 async def _evaluate_mcer_message(text: str, sel_points: int) -> dict[str, object]:
@@ -389,6 +458,7 @@ async def handle_linked_text(update: Update, context: ContextTypes.DEFAULT_TYPE)
         await update.message.reply_text(
             f"+10 puntos SEL por mensaje validado. Total: {points_result.get('sel_points', 0)}"
         )
+        await _send_poentaro_milestone_messages(update, patrol, points_result)
         try:
             mcer = await _evaluate_mcer_message(
                 incoming_text,
@@ -400,7 +470,8 @@ async def handle_linked_text(update: Update, context: ContextTypes.DEFAULT_TYPE)
                 f"Lexiko: {mcer.get('lexical_score')}/100 | Gramatiko: {mcer.get('grammar_score')}/100\n"
                 f"Partopreno: {mcer.get('participation_score')}/100\n\n"
                 f"{mcer.get('personalized_congrats')}\n"
-                f"Siguiente foco: {mcer.get('next_focus')}"
+                f"Siguiente foco: {mcer.get('next_focus')}\n"
+                f"Feedback asertivo: {mcer.get('assertive_feedback')}"
             )
         except Exception:
             # Keep mission flow resilient if pedagogical scoring fails.
@@ -448,6 +519,133 @@ async def handle_status(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
         f"Puntos SEL: {patrol.get('sel_points', 0)}\n"
         "Pendiente: asignacion de patrulla hermana."
     )
+
+
+async def handle_atestilo(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """
+    /atestilo command: Generate MCER linguistic excellence certificate.
+    
+    - If < 80% of B1 (2,401 pts): Show watermarked preview + motivational message
+    - If >= 80% of B1: Show full certificate without watermark
+    - Notify leader via Dashboard when scouts request their certificate
+    """
+    if not update.effective_chat or not update.message:
+        return
+
+    patrol = await find_patrol_by_chat_id(update.effective_chat.id)
+    if patrol is None:
+        await update.message.reply_text(
+            "Para solicitar tu certificado, primero vincula tu patrulla con /start."
+        )
+        return
+
+    await update.message.reply_text(
+        "🏆 Generando tu Atestilo de Ligilo...\n\n"
+        "⏳ Un momento mientras calculamos tu progreso MCER..."
+    )
+
+    # Get or create certificate
+    cert_data = await get_mcer_certificate(update.effective_chat.id)
+    
+    if not cert_data.get("ok"):
+        await update.message.reply_text(
+            "❌ No pude generar tu certificado ahora. Intenta nuevamente en unos minutos."
+        )
+        return
+
+    patrol_name = cert_data.get("patrol_name")
+    sister_name = cert_data.get("sister_patrol_name")
+    mcer_level = cert_data.get("mcer_level")
+    points = cert_data.get("points")
+    with_watermark = cert_data.get("with_watermark")
+    progress_pct = cert_data.get("progress_to_b1_pct")
+    points_to_b1 = cert_data.get("points_to_b1")
+
+    # Generate PDF
+    from apps.scouting.services.certificate_generator import generate_mcer_certificate
+
+    try:
+        pdf_bytes = generate_mcer_certificate(
+            patrol_name=patrol_name,
+            sister_patrol_name=sister_name,
+            delegation_name=cert_data.get("delegation_name"),
+            mcer_level=mcer_level,
+            points=points,
+            match_start_date=cert_data.get("match_start_date"),
+            certification_code=cert_data.get("certification_code"),
+            qr_png_b64=cert_data.get("qr_png_b64"),
+            leader_name=cert_data.get("leader_name"),
+            with_watermark=with_watermark,
+        )
+    except Exception as e:
+        await update.message.reply_text(
+            f"❌ Error al generar el PDF: {str(e)[:100]}"
+        )
+        return
+
+    # Determine message based on progress
+    if with_watermark:
+        # Preview mode (< 80% of B1)
+        level_emoji_map = {"A1": "🌱", "A2": "🌿", "B1": "🌲", "B2": "🏔️"}
+        level_emoji = level_emoji_map.get(mcer_level, "⭐")
+        
+        message = (
+            f"{level_emoji} *¡Estás muy cerca, Explorador!*\n\n"
+            f"Has alcanzado el nivel *{mcer_level}* con *{points} puntos*.\n"
+            f"Progreso hacia B1: *{progress_pct}%*\n\n"
+            f"Te faltan *{points_to_b1} puntos* para desbloquear tu certificación oficial sin marca de agua.\n\n"
+            f"💡 *Próximo paso:* Completa tu video de YouTube con tu patrulla hermana "
+            f"_{sister_name}_ para limpiar la previsualización.\n\n"
+            f"_Este es tu Atestilo de Ligilo en modo vista previa._"
+        )
+    else:
+        # Full certificate (>= 80% of B1)
+        message = (
+            f"🎉 *¡Felicitaciones, {patrol_name}!*\n\n"
+            f"Has alcanzado el nivel *{mcer_level}* con *{points} puntos efectivos*.\n\n"
+            f"Tu certificado de Excelencia Lingüística SEL está listo en alta resolución.\n\n"
+            f"🤝 Compartido con tu patrulla hermana: *{sister_name}*\n\n"
+            f"Escanea el código QR en tu certificado para ver tu progreso en el Muro de la Fama."
+        )
+
+    # Send PDF document
+    await context.bot.send_document(
+        chat_id=update.effective_chat.id,
+        document=pdf_bytes,
+        filename=f"Atestilo_{patrol_name}_{mcer_level}.pdf",
+        caption=message,
+        parse_mode=ParseMode.MARKDOWN,
+    )
+
+    # Notify leader
+    notification_result = await notify_leader_about_certificate(update.effective_chat.id)
+    if notification_result.get("notified"):
+        leader_email = notification_result.get("leader_email")
+        # Send email to leader (async, non-blocking)
+        try:
+            from django.core.mail import send_mail
+            from asgiref.sync import sync_to_async
+            
+            await sync_to_async(send_mail)(
+                subject=f"📊 {patrol_name} está visualizando su certificado MCER",
+                message=(
+                    f"Hola,\n\n"
+                    f"La patrulla {patrol_name} acaba de solicitar su Atestilo de Ligilo.\n\n"
+                    f"Nivel actual: {mcer_level}\n"
+                    f"Puntos: {points}\n"
+                    f"Progreso a B1: {progress_pct}%\n\n"
+                    f"¿Deseas enviarles un mensaje de aliento para el tramo final?\n\n"
+                    f"Accede al Dashboard del Líder para ver más detalles:\n"
+                    f"{os.getenv('DJANGO_PUBLIC_BASE_URL', 'http://localhost:8000')}/scouts/dashboard/\n\n"
+                    f"—\n"
+                    f"Skolto-Instruisto (IA)"
+                ),
+                from_email=os.getenv("DEFAULT_FROM_EMAIL", "noreply@ligilo.org"),
+                recipient_list=[leader_email],
+                fail_silently=True,
+            )
+        except Exception:
+            pass  # Emails are best-effort, don't block bot flow
 
 
 async def handle_entregar(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -681,6 +879,7 @@ async def handle_voice_message(update: Update, context: ContextTypes.DEFAULT_TYP
         await update.message.reply_text(
             f"+50 puntos SEL por audio validado. Total: {points_result.get('sel_points', 0)}"
         )
+        await _send_poentaro_milestone_messages(update, patrol, points_result)
         try:
             mcer = await _evaluate_mcer_message(
                 transcript_text,
@@ -692,7 +891,8 @@ async def handle_voice_message(update: Update, context: ContextTypes.DEFAULT_TYP
                 f"Lexiko: {mcer.get('lexical_score')}/100 | Gramatiko: {mcer.get('grammar_score')}/100\n"
                 f"Partopreno: {mcer.get('participation_score')}/100\n\n"
                 f"{mcer.get('personalized_congrats')}\n"
-                f"Siguiente foco: {mcer.get('next_focus')}"
+                f"Siguiente foco: {mcer.get('next_focus')}\n"
+                f"Feedback asertivo: {mcer.get('assertive_feedback')}"
             )
         except Exception:
             pass
@@ -756,6 +956,7 @@ async def init_telegram_application() -> Application:
         )
 
         app.add_handler(CommandHandler("status", handle_status))
+        app.add_handler(CommandHandler("atestilo", handle_atestilo))
         app.add_handler(CommandHandler("entregar", handle_entregar))
         app.add_handler(CommandHandler("reportar_incidencia", handle_reportar_incidencia))
         app.add_handler(CommandHandler("miaj_punktoj", handle_miaj_punktoj))

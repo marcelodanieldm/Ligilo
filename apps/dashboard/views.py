@@ -1,7 +1,10 @@
 import io
+from datetime import timedelta
 from urllib.parse import urlencode
+from uuid import UUID
 
 from django.contrib.auth.decorators import login_required
+from django.db import models
 from django.http import Http404, HttpRequest, HttpResponse, HttpResponseRedirect
 from django.urls import reverse
 from django.shortcuts import get_object_or_404, render
@@ -9,8 +12,20 @@ from django.utils import timezone
 from django.utils.text import slugify
 
 from apps.dashboard.controllers.leader_dashboard_controller import LeaderDashboardController
-from apps.scouting.models import Patrol, PointLog, SteloCertification, Submission
+from apps.scouting.forms import PatrolMemberFormSet, PatrolOnboardingStepAForm
+from apps.scouting.models import (
+    MatchCelebrationEvent,
+    Patrol,
+    PatrolInterest,
+    PatrolMember,
+    PatrolYouTubeSubmission,
+    PointLog,
+    SteloCertification,
+    Submission,
+)
+from apps.scouting.services.poentaro_engine import PoentaroEngine
 from apps.scouting.services.certification import check_and_issue_certification, verify_certification_token
+from fastapi_app.services.telegram_manager import TelegramManager
 
 
 def _pdf_escape(text: str) -> str:
@@ -75,8 +90,251 @@ def _build_simple_pdf(lines: list[str]) -> bytes:
 
 @login_required
 def leader_dashboard(request: HttpRequest) -> HttpResponse:
-    controller = LeaderDashboardController()
+    controller = LeaderDashboardController(user=request.user)
     return render(request, "ligilo/leader_dashboard.html", controller.get_context())
+
+
+def _parse_uuid_or_404(raw: str) -> UUID:
+    try:
+        return UUID(str(raw))
+    except (TypeError, ValueError) as exc:
+        raise Http404("token invalido") from exc
+
+
+def _get_patrol_from_token(token: str) -> Patrol:
+    parsed = _parse_uuid_or_404(token)
+    patrol = (
+        Patrol.objects.select_related("event")
+        .filter(models.Q(invitation_token=parsed) | models.Q(telegram_node_token=parsed))
+        .first()
+    )
+    if patrol is None:
+        raise Http404("patrol not found for token")
+    return patrol
+
+
+def patrol_onboarding_step_a(request: HttpRequest, token: str) -> HttpResponse:
+    patrol = _get_patrol_from_token(token)
+    initial_interests = list(patrol.interests.values_list("tag", flat=True))
+
+    if request.method == "POST":
+        form = PatrolOnboardingStepAForm(request.POST, instance=patrol)
+        if form.is_valid():
+            updated = form.save(commit=False)
+            updated.onboarding_step = max(updated.onboarding_step, 1)
+            updated.save()
+
+            PatrolInterest.objects.filter(patrol=updated).delete()
+            for tag in form.cleaned_data.get("interests") or []:
+                PatrolInterest.objects.create(patrol=updated, tag=tag)
+
+            return HttpResponseRedirect(reverse("dashboard:patrol-onboarding-step-b", args=[token]))
+    else:
+        form = PatrolOnboardingStepAForm(
+            instance=patrol,
+            initial={"event": patrol.event_id, "interests": initial_interests},
+        )
+
+    return render(
+        request,
+        "ligilo/patrol_onboarding_step_a.html",
+        {
+            "form": form,
+            "patrol": patrol,
+            "token": token,
+        },
+    )
+
+
+def patrol_onboarding_step_b(request: HttpRequest, token: str) -> HttpResponse:
+    patrol = _get_patrol_from_token(token)
+
+    if request.method == "POST":
+        formset = PatrolMemberFormSet(request.POST)
+        if formset.is_valid():
+            PatrolMember.objects.filter(patrol=patrol).delete()
+            created = 0
+            for form in formset:
+                data = form.cleaned_data
+                if not data:
+                    continue
+                if not any(data.get(k) for k in ["full_name", "alias", "gender", "birth_date", "initial_level"]):
+                    continue
+                member = PatrolMember(
+                    patrol=patrol,
+                    full_name=data["full_name"],
+                    alias=data.get("alias") or "",
+                    gender=data["gender"],
+                    birth_date=data["birth_date"],
+                    initial_level=data["initial_level"],
+                )
+                member.full_clean()
+                member.save()
+                created += 1
+
+            patrol.member_count = created
+            patrol.onboarding_step = max(patrol.onboarding_step, 2)
+            patrol.save(update_fields=["member_count", "onboarding_step", "updated_at"])
+
+            return HttpResponseRedirect(reverse("dashboard:patrol-onboarding-step-c", args=[token]))
+    else:
+        initial_rows = []
+        for member in patrol.members.all()[:5]:
+            initial_rows.append(
+                {
+                    "full_name": member.full_name,
+                    "alias": member.alias,
+                    "gender": member.gender,
+                    "birth_date": member.birth_date,
+                    "initial_level": member.initial_level,
+                }
+            )
+        while len(initial_rows) < 5:
+            initial_rows.append({})
+        formset = PatrolMemberFormSet(initial=initial_rows)
+
+    return render(
+        request,
+        "ligilo/patrol_onboarding_step_b.html",
+        {
+            "formset": formset,
+            "patrol": patrol,
+            "token": token,
+        },
+    )
+
+
+def patrol_onboarding_step_c(request: HttpRequest, token: str) -> HttpResponse:
+    patrol = _get_patrol_from_token(token)
+
+    manager = TelegramManager()
+    if not patrol.telegram_node_link:
+        patrol.telegram_node_link = manager.build_unique_patrol_link(patrol)
+        patrol.save(update_fields=["telegram_node_link", "updated_at"])
+
+    joined_count = patrol.members.exclude(joined_node_at__isnull=True).count()
+    member_target = patrol.members.count()
+
+    if request.method == "POST" and request.POST.get("action") == "activate":
+        all_joined = member_target >= 2 and joined_count == member_target
+        if all_joined:
+            patrol.telegram_node_active = True
+            patrol.onboarding_step = max(patrol.onboarding_step, 3)
+            patrol.onboarding_completed_at = timezone.now()
+            patrol.save(
+                update_fields=[
+                    "telegram_node_active",
+                    "onboarding_step",
+                    "onboarding_completed_at",
+                    "updated_at",
+                ]
+            )
+            return HttpResponseRedirect(reverse("dashboard:patrol-operations", args=[token]))
+
+    return render(
+        request,
+        "ligilo/patrol_onboarding_step_c.html",
+        {
+            "patrol": patrol,
+            "token": token,
+            "joined_count": joined_count,
+            "member_target": member_target,
+            "all_joined": member_target >= 2 and joined_count == member_target,
+        },
+    )
+
+
+def _infer_ai_recommendation(mcer_level: str, text_points: int, audio_points: int) -> str:
+    if mcer_level == "A1":
+        return "Ustedes ya dominan frases base. Sumen vocabulario de campismo: tendumado, fajro, kompaso."
+    if mcer_level == "A2":
+        if audio_points < text_points:
+            return "Jaguaroj, usen mas audio colaborativo para subir fluidez y desbloquear B1."
+        return "Excelente progreso A2. Agreguen verbos en pasado para narrar experiencias de campamento."
+    if mcer_level == "B1":
+        return "Muy buen nivel B1. Para ir a B2, argumenten causas y consecuencias con ejemplos reales."
+    return "Nivel avanzado. Mantengan liderazgo internacional y proyecto de impacto para cerrar B2."
+
+
+def patrol_operations_dashboard(request: HttpRequest, token: str) -> HttpResponse:
+    patrol = _get_patrol_from_token(token)
+    engine = PoentaroEngine()
+    snapshot = engine.compute(patrol)
+
+    linguo_points = (
+        PointLog.objects.filter(
+            patrol=patrol,
+            event_type__in=[PointLog.EventType.TEXT_VALIDATED, PointLog.EventType.AUDIO_VALIDATED],
+        ).aggregate(total=models.Sum("points")).get("total")
+        or 0
+    )
+    agado_points = (
+        PointLog.objects.filter(patrol=patrol, event_type=PointLog.EventType.YOUTUBE_MISSION)
+        .aggregate(total=models.Sum("points"))
+        .get("total")
+        or 0
+    )
+    amikeco_points = (
+        MatchCelebrationEvent.objects.filter(patrol=patrol, first_interaction_at__isnull=False).count() * 40
+    )
+
+    recent_submission = (
+        PatrolYouTubeSubmission.objects.filter(patrol=patrol).order_by("-submitted_at").first()
+    )
+    if recent_submission:
+        findings = recent_submission.audit_findings or {}
+        ai_feedback = findings.get(
+            "esperanto_feedback",
+            "Bravo. Mantengan claridad en la pronunciación y coordinación entre patrullas.",
+        )
+        validation_note = (
+            f"Tu video recibió estado {recent_submission.validation_status}, auditoría {recent_submission.audit_status} "
+            f"y sello del líder {recent_submission.leader_approval_status}."
+        )
+    else:
+        ai_feedback = "Aún sin auditoría reciente. Envíen una misión YouTube para recibir feedback 360."
+        validation_note = "No hay videos validados todavía."
+
+    validated_360_count = PatrolYouTubeSubmission.objects.filter(
+        patrol=patrol,
+        validation_status=PatrolYouTubeSubmission.ValidationStatus.VALID,
+        audit_status=PatrolYouTubeSubmission.AuditStatus.PASSED,
+        leader_approval_status=PatrolYouTubeSubmission.LeaderApprovalStatus.APPROVED,
+    ).count()
+
+    b1_ready = snapshot.effective_score >= 3500 and validated_360_count >= 4
+    b2_ready = snapshot.effective_score >= 6000 and patrol.leadership_project_validated
+
+    if snapshot.effective_score >= 6001:
+        energy_pct = 100
+    else:
+        energy_pct = max(1, min(99, int((snapshot.effective_score * 100) / 6001)))
+
+    context = {
+        "patrol": patrol,
+        "token": token,
+        "node_link": patrol.telegram_node_link,
+        "rules": [
+            "Interacción diaria: mínimo 3 mensajes por patrulla.",
+            "Honor Scout: la validación de pares es sagrada.",
+            "Feedback 360: validación técnica, pares, líder y auditoría IA.",
+        ],
+        "mcer_level": snapshot.mcer_level,
+        "energy_pct": energy_pct,
+        "linguo_points": linguo_points,
+        "amikeco_points": amikeco_points,
+        "agado_points": agado_points,
+        "ai_recommendation": _infer_ai_recommendation(snapshot.mcer_level, linguo_points, agado_points),
+        "latest_feedback": ai_feedback,
+        "validation_note": validation_note,
+        "validated_360_count": validated_360_count,
+        "b1_ready": b1_ready,
+        "b2_ready": b2_ready,
+        "b1_missing_points": max(0, 3500 - snapshot.effective_score),
+        "b1_missing_videos": max(0, 4 - validated_360_count),
+        "b2_missing_points": max(0, 6000 - snapshot.effective_score),
+    }
+    return render(request, "ligilo/patrol_operations_dashboard.html", context)
 
 
 @login_required
@@ -226,6 +484,86 @@ def stelo_issue_qr(request: HttpRequest) -> HttpResponse:
     return HttpResponse(
         _json.dumps(result, ensure_ascii=False),
         content_type="application/json; charset=utf-8",
+    )
+
+
+@login_required
+def youtube_submission_review(request: HttpRequest, submission_id: int) -> HttpResponse:
+    submission = get_object_or_404(
+        PatrolYouTubeSubmission.objects.select_related("patrol__event"),
+        pk=submission_id,
+    )
+
+    if request.method == "POST":
+        action = (request.POST.get("action") or "").strip().lower()
+        notes = (request.POST.get("notes") or "").strip()
+
+        if action == "approve":
+            submission.leader_approval_status = PatrolYouTubeSubmission.LeaderApprovalStatus.APPROVED
+            submission.leader_approved_at = timezone.now()
+            submission.final_approved_at = timezone.now()
+            submission.leader_approval_notes = notes
+            submission.approved_for_wall_of_fame = bool(
+                submission.patrol.sel_points >= SteloCertification.THRESHOLD_GOLD
+            )
+            submission.save(
+                update_fields=[
+                    "leader_approval_status",
+                    "leader_approved_at",
+                    "final_approved_at",
+                    "leader_approval_notes",
+                    "approved_for_wall_of_fame",
+                ]
+            )
+
+            already_awarded = PointLog.objects.filter(
+                patrol=submission.patrol,
+                event_type=PointLog.EventType.YOUTUBE_MISSION,
+                external_ref=submission.video_id,
+            ).exists()
+            if not already_awarded:
+                PointLog.objects.create(
+                    patrol=submission.patrol,
+                    event_type=PointLog.EventType.YOUTUBE_MISSION,
+                    points=500,
+                    external_ref=submission.video_id,
+                    metadata={
+                        "source": "leader_final_approval",
+                        "submission_id": submission.id,
+                        "notes": notes,
+                    },
+                )
+                Patrol.objects.filter(pk=submission.patrol_id).update(sel_points=models.F("sel_points") + 500)
+
+            return HttpResponseRedirect(reverse("dashboard:youtube-review", args=[submission.id]))
+
+        if action == "reject":
+            submission.leader_approval_status = PatrolYouTubeSubmission.LeaderApprovalStatus.REJECTED
+            submission.leader_approval_notes = notes
+            submission.final_approved_at = None
+            submission.save(
+                update_fields=[
+                    "leader_approval_status",
+                    "leader_approval_notes",
+                    "final_approved_at",
+                ]
+            )
+            return HttpResponseRedirect(reverse("dashboard:youtube-review", args=[submission.id]))
+
+    return render(
+        request,
+        "ligilo/youtube_submission_review.html",
+        {
+            "submission": submission,
+            "patrol": submission.patrol,
+            "audit_findings": submission.audit_findings or {},
+            "validation_errors": submission.validation_errors or [],
+            "audit_errors": submission.audit_errors or [],
+            "is_pending": (
+                submission.leader_approval_status
+                == PatrolYouTubeSubmission.LeaderApprovalStatus.PENDING
+            ),
+        },
     )
 
 

@@ -1,0 +1,40 @@
+{% extends 'ligilo/base.html' %}
+
+{% block title %}Onboarding Paso C{% endblock %}
+
+{% block body %}
+<div class="mx-auto max-w-4xl px-4 py-8">
+  <h1 class="text-3xl font-semibold text-pine">Promesa Digital · Paso C</h1>
+  <p class="mt-2 text-sm text-charcoal/80">Activa el nodo compartido de Telegram para iniciar Skolto-Instruisto.</p>
+
+  <div class="mt-6 rounded-3xl border border-pine/10 bg-white p-6 shadow-card">
+    <h2 class="text-lg font-semibold text-pine">Link único del nodo</h2>
+    <p class="mt-2 text-sm text-charcoal/80">Comparte este enlace con la patrulla local y patrullas hermanas (máximo 3 patrullas, 15 personas + bot).</p>
+    <a href="{{ patrol.telegram_node_link }}" class="mt-3 block break-all rounded-2xl bg-fog px-3 py-3 text-sm text-pine">{{ patrol.telegram_node_link }}</a>
+
+    <div class="mt-5 grid gap-3 md:grid-cols-2">
+      <div class="rounded-2xl bg-canvas p-4">
+        <p class="text-xs uppercase tracking-[0.2em] text-moss">Miembros registrados</p>
+        <p class="mt-1 text-2xl font-semibold text-pine">{{ member_target }}</p>
+      </div>
+      <div class="rounded-2xl bg-canvas p-4">
+        <p class="text-xs uppercase tracking-[0.2em] text-moss">Miembros unidos al nodo</p>
+        <p class="mt-1 text-2xl font-semibold text-pine">{{ joined_count }}</p>
+      </div>
+    </div>
+
+    {% if all_joined %}
+      <div class="mt-4 rounded-2xl border border-emerald-300 bg-emerald-50 p-3 text-sm text-emerald-800">Todos los miembros se unieron. Ya puedes activar el Skolto-Instruisto.</div>
+    {% else %}
+      <div class="mt-4 rounded-2xl border border-amber-300 bg-amber-50 p-3 text-sm text-amber-800">Aún faltan miembros por unirse al nodo para activar el sistema.</div>
+    {% endif %}
+
+    <form method="post" class="mt-6">
+      {% csrf_token %}
+      <input type="hidden" name="action" value="activate" />
+      <button type="submit" class="rounded-2xl bg-pine px-5 py-3 text-sm font-semibold text-white disabled:opacity-50" {% if not all_joined %}disabled{% endif %}>Activar nodo</button>
+      <a class="ml-3 rounded-2xl border border-pine px-5 py-3 text-sm font-semibold text-pine" href="{% url 'dashboard:patrol-onboarding-step-b' token %}">Volver</a>
+    </form>
+  </div>
+</div>
+{% endblock %}

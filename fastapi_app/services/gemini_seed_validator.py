@@ -28,9 +28,9 @@ SYSTEM_PROMPT = (
 MCER_SYSTEM_PROMPT = (
     "You are Skolto-Instruisto progression evaluator for Esperanto using CEFR levels. "
     "Return exactly one valid JSON object with these keys only: "
-    "mcer_level (string: A1 or B1), lexical_score (integer 0-100), grammar_score (integer 0-100), "
+    "mcer_level (string: A1, A2 or B1), lexical_score (integer 0-100), grammar_score (integer 0-100), "
     "participation_score (integer 0-100), personalized_congrats (string, max 240 chars), "
-    "next_focus (string, max 240 chars). "
+    "next_focus (string, max 240 chars), assertive_feedback (string, max 240 chars). "
     "No markdown, no extra keys, no explanations."
 )
 
@@ -227,6 +227,7 @@ def _validate_mcer_schema(obj: dict[str, Any]) -> tuple[bool, str | None]:
         "participation_score",
         "personalized_congrats",
         "next_focus",
+        "assertive_feedback",
     }
     keys = set(obj.keys())
     missing = required_keys - keys
@@ -236,8 +237,8 @@ def _validate_mcer_schema(obj: dict[str, Any]) -> tuple[bool, str | None]:
     if extra:
         return False, f"Extra keys: {sorted(extra)}"
 
-    if obj.get("mcer_level") not in {"A1", "B1"}:
-        return False, "mcer_level must be A1 or B1"
+    if obj.get("mcer_level") not in {"A1", "A2", "B1"}:
+        return False, "mcer_level must be A1, A2 or B1"
 
     for key in ("lexical_score", "grammar_score", "participation_score"):
         value = obj.get(key)
@@ -246,7 +247,7 @@ def _validate_mcer_schema(obj: dict[str, Any]) -> tuple[bool, str | None]:
         if value < 0 or value > 100:
             return False, f"{key} must be 0..100"
 
-    for key in ("personalized_congrats", "next_focus"):
+    for key in ("personalized_congrats", "next_focus", "assertive_feedback"):
         value = obj.get(key)
         if not isinstance(value, str):
             return False, f"{key} must be string"
@@ -267,6 +268,7 @@ def evaluate_mcer_progress(
     """
     Evaluate Esperanto progression by MCER level focus.
     A1: vocabulario básico e identificación de objetos scouts.
+    A2: interacción simple, rutinas, instrucciones y narración breve en presente/pasado cercano.
     B1: argumentación y tiempos verbales compuestos.
     """
     resolved_api_key = api_key or os.getenv("GEMINI_API_KEY", "")
@@ -274,13 +276,18 @@ def evaluate_mcer_progress(
         raise ValueError("Missing Gemini API key. Use api_key or GEMINI_API_KEY.")
 
     level = (mcer_level or "A1").strip().upper()
-    if level not in {"A1", "B1"}:
+    if level not in {"A1", "A2", "B1"}:
         level = "A1"
 
     if level == "A1":
         level_focus = (
             "Enfocate en vocabulario básico scout, identificación de objetos (tenda, ŝnuro, kompaso), "
             "y frases cortas funcionales."
+        )
+    elif level == "A2":
+        level_focus = (
+            "Enfocate en interacción cotidiana simple entre patrullas, instrucciones claras, "
+            "descripción de rutinas del campamento y narración breve de acciones recientes."
         )
     else:
         level_focus = (
@@ -292,8 +299,9 @@ def evaluate_mcer_progress(
         "Analiza el siguiente mensaje en Esperanto de una patrulla scout. "
         f"Nivel objetivo MCER: {level}. "
         f"Criterio del nivel: {level_focus}\n\n"
-        "Devuelve puntuaciones y una felicitación personalizada motivadora, "
-        "más el siguiente foco pedagógico corto.\n\n"
+        "Devuelve puntuaciones, una felicitación personalizada motivadora, "
+        "el siguiente foco pedagógico corto y feedback con comunicación asertiva "
+        "(claro, respetuoso y accionable).\n\n"
         f"Texto:\n{text}"
     )
 
@@ -342,6 +350,18 @@ def evaluate_mcer_progress(
                 "participation_score": 62,
                 "personalized_congrats": "Bonege! Vi jam nomas bazajn skoltajn objektojn en Esperanto.",
                 "next_focus": "Praktiku 3 frazojn pri objektoj de via tendaro kun simpla verbo.",
+                "assertive_feedback": "Tu avance es real. Mantén frases breves y agrega un verbo claro por oración.",
+            }
+
+        if level == "A2":
+            return {
+                "mcer_level": "A2",
+                "lexical_score": 66,
+                "grammar_score": 63,
+                "participation_score": 70,
+                "personalized_congrats": "Tre bone! Vi jam komunikas kun via patrolo en simplaj, utilaj situacioj.",
+                "next_focus": "Kreu dialogon de 4 linioj: saluto, instrukcio, konfirmo, adiaŭo.",
+                "assertive_feedback": "Tu comunicación ya conecta al equipo. Próximo paso: dar instrucciones más precisas y verificar comprensión.",
             }
 
         return {
@@ -351,4 +371,5 @@ def evaluate_mcer_progress(
             "participation_score": 68,
             "personalized_congrats": "Tre bone! Via argumento en Esperanto jam sonas pli matura.",
             "next_focus": "Uzu konektilojn por argumenti kaj praktiku verbajn formojn kun pli longa respondo.",
+            "assertive_feedback": "Tu base es sólida. Refuerza tus argumentos con ejemplos concretos y cierra cada idea con una conclusión breve.",
         }

@@ -17,9 +17,12 @@ from apps.scouting.models import (
     AuditLog,
     Event,
     MatchCelebrationEvent,
+    MCERCertificate,
     Mission,
     Payment,
     Patrol,
+    PatrolInterest,
+    PatrolMember,
     PatrolMatch,
     PatrolYouTubeSubmission,
     PointLog,
@@ -497,6 +500,28 @@ class PatrolAdmin(admin.ModelAdmin):
             return f"⏳ pendiente {tier}"
 
 
+@admin.register(PatrolMember)
+class PatrolMemberAdmin(admin.ModelAdmin):
+    list_display = (
+        "patrol",
+        "full_name",
+        "alias",
+        "gender",
+        "birth_date",
+        "initial_level",
+        "joined_node_at",
+    )
+    list_filter = ("gender", "initial_level", "joined_node_at")
+    search_fields = ("patrol__name", "patrol__delegation_name", "full_name", "alias")
+    readonly_fields = ("created_at", "updated_at")
+
+
+@admin.register(PatrolInterest)
+class PatrolInterestAdmin(admin.ModelAdmin):
+    list_display = ("patrol", "tag")
+    search_fields = ("patrol__name", "patrol__delegation_name", "tag")
+
+
 @admin.register(PatrolMatch)
 class PatrolMatchAdmin(admin.ModelAdmin):
     list_display = ("event", "patrol_a", "patrol_b", "status", "is_training", "matched_at")
@@ -694,6 +719,39 @@ class RoverIncidentAdmin(admin.ModelAdmin):
     list_filter = ("status", "priority", "created_at")
     search_fields = ("patrol__name", "patrol__delegation_name", "description")
     readonly_fields = ("created_at", "reported_by_chat_id")
+
+
+@admin.register(MCERCertificate)
+class MCERCertificateAdmin(admin.ModelAdmin):
+    list_display = (
+        "issued_at",
+        "patrol",
+        "sister_patrol",
+        "mcer_level",
+        "points_at_issue",
+        "certification_code",
+        "preview_requested_count",
+    )
+    list_filter = ("mcer_level", "issued_at")
+    search_fields = (
+        "patrol__name",
+        "patrol__delegation_name",
+        "certification_code",
+        "sister_patrol__name",
+    )
+    readonly_fields = (
+        "issued_at",
+        "certification_code",
+        "qr_png_b64",
+        "preview_requested_count",
+        "last_preview_requested_at",
+        "leader_notified_at",
+    )
+    autocomplete_fields = ["patrol", "sister_patrol"]
+    
+    def get_queryset(self, request):
+        qs = super().get_queryset(request)
+        return qs.select_related("patrol", "sister_patrol")
 
 
 def _patch_admin_index() -> None:

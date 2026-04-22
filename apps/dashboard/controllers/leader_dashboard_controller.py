@@ -17,6 +17,7 @@ from apps.dashboard.models import (
     StatCard,
 )
 from apps.scouting.models import Event, Patrol, PatrolYouTubeSubmission, PointLog, Submission
+from apps.scouting.services.poentaro_engine import PoentaroEngine
 
 
 class LeaderDashboardController:
@@ -38,6 +39,33 @@ class LeaderDashboardController:
         "UK",  # Ukraina
         "IT",  # Itala
     ]
+
+    def __init__(self, user=None) -> None:
+        self.user = user
+
+    def _led_patrols(self):
+        qs = Patrol.objects.select_related("event").filter(is_active=True)
+        if self.user and getattr(self.user, "is_authenticated", False):
+            user_email = (self.user.email or "").strip().lower()
+            if user_email:
+                by_email = qs.filter(leader_email__iexact=user_email)
+                if by_email.exists():
+                    return by_email.order_by("delegation_name", "name")
+            user_name = (getattr(self.user, "get_full_name", lambda: "")() or self.user.username or "").strip()
+            if user_name:
+                by_name = qs.filter(leader_name__icontains=user_name)
+                if by_name.exists():
+                    return by_name.order_by("delegation_name", "name")
+        return qs.order_by("delegation_name", "name")[:6]
+
+    @staticmethod
+    def _telegram_link(chat_id: int | None) -> str:
+        if not chat_id:
+            return ""
+        raw = str(chat_id)
+        if raw.startswith("-100") and len(raw) > 4:
+            return f"https://t.me/c/{raw[4:]}"
+        return f"tg://openmessage?chat_id={raw}"
 
     def _build_group_participation_metrics(self) -> dict:
         now = timezone.now()
@@ -74,6 +102,94 @@ class LeaderDashboardController:
             "teamwork_pct": teamwork_pct,
             "last_update_note": "Actualizado cada 2 dias (ventana movil).",
         }
+
+    def _build_patrol_progress(self) -> list[PatrolStatus]:
+        engine = PoentaroEngine()
+        rows: list[PatrolStatus] = []
+        for patrol in self._led_patrols():
+            snapshot = engine.compute(patrol)
+            if snapshot.mcer_level == "B1":
+                dot = "bg-moss"
+            elif snapshot.mcer_level == "A2":
+                dot = "bg-amber-500"
+            else:
+                dot = "bg-rose-500"
+
+            rows.append(
+                PatrolStatus(
+                    name=f"{patrol.delegation_name} / {patrol.name}",
+                    status_dot=dot,
+                    summary=(
+                        f"Poentaro {snapshot.effective_score} pts · "
+                        f"MCER {snapshot.mcer_level} · SEL {patrol.sel_points}"
+                    ),
+                    telegram_link=self._telegram_link(patrol.telegram_chat_id),
+                    progress_label=f"Base {snapshot.base_points} · Telegram {snapshot.daily_telegram_points} · Pares {snapshot.peer_validation_points}",
+                )
+            )
+        return rows
+
+    def _build_leader_tasks(self) -> list[LeaderTask]:
+        led_patrols = list(self._led_patrols())
+        if not led_patrols:
+            return [
+                LeaderTask(
+                    title="Sin patrullas asignadas",
+                    description="No se encontraron patrullas lideradas por este usuario.",
+                    tag="Info",
+                    tag_tone="pine",
+                )
+            ]
+
+        submissions = Submission.objects.filter(patrol__in=led_patrols).select_related("mission", "patrol")
+
+        pending_qs = submissions.filter(status=Submission.Status.REJECTED).order_by("-submitted_at")[:3]
+        to_validate_qs = submissions.filter(status=Submission.Status.RECEIVED).order_by("-submitted_at")[:3]
+        validated_qs = submissions.filter(status=Submission.Status.REVIEWED).order_by("-submitted_at")[:3]
+
+        tasks: list[LeaderTask] = []
+
+        if to_validate_qs:
+            for submission in to_validate_qs:
+                tasks.append(
+                    LeaderTask(
+                        title=f"A validar: {submission.mission.title}",
+                        description=f"{submission.patrol.delegation_name} / {submission.patrol.name}",
+                        tag="A validar",
+                        tag_tone="bark",
+                    )
+                )
+
+        if pending_qs:
+            for submission in pending_qs:
+                tasks.append(
+                    LeaderTask(
+                        title=f"Pendiente: {submission.mission.title}",
+                        description=f"{submission.patrol.delegation_name} / {submission.patrol.name}",
+                        tag="Pendiente",
+                        tag_tone="pine",
+                    )
+                )
+
+        if validated_qs:
+            for submission in validated_qs:
+                tasks.append(
+                    LeaderTask(
+                        title=f"Validado: {submission.mission.title}",
+                        description=f"{submission.patrol.delegation_name} / {submission.patrol.name}",
+                        tag="Validado",
+                        tag_tone="moss",
+                    )
+                )
+
+        return tasks or [
+            LeaderTask(
+                title="Sin tareas operativas",
+                description="No hay submissions pendientes, a validar o validadas para mostrar.",
+                tag="Info",
+                tag_tone="pine",
+            )
+        ]
 
     def _build_certificate(self) -> PatrolCertificate:
         active_event = Event.objects.filter(is_active=True).order_by("-starts_at").first()
@@ -163,6 +279,8 @@ class LeaderDashboardController:
     def get_context(self) -> dict:
         certificate = self._build_certificate()
         participation = self._build_group_participation_metrics()
+        patrol_progress = self._build_patrol_progress()
+        leader_tasks = self._build_leader_tasks()
         page_model = DashboardPageModel(
             lang="es",
             leader=LeaderIdentity(initial="L"),
@@ -255,49 +373,9 @@ class LeaderDashboardController:
                 ),
             ),
             tasks=[
-                LeaderTask(
-                    title="Seguimiento de participación grupal",
-                    description=(
-                        f"Corte {participation['window_label']}: teamwork en video {participation['teamwork_pct']}%. "
-                        f"{participation['last_update_note']}"
-                    ),
-                    tag="Cada 2 dias",
-                    tag_tone="moss",
-                ),
-                LeaderTask(
-                    title="Reenviar mision a patrulla Norte",
-                    description=(
-                        "La confirmacion no llego tras 2 intentos; sugerido fallback SMS interno."
-                    ),
-                    tag="Automatizable",
-                    tag_tone="moss",
-                ),
-                LeaderTask(
-                    title="Cerrar briefing de seguridad",
-                    description=(
-                        "El panel sugiere convertir el briefing en mensaje fijo para 5 grupos nuevos."
-                    ),
-                    tag="Hoy",
-                    tag_tone="pine",
-                ),
+                *leader_tasks,
             ],
-            patrols=[
-                PatrolStatus(
-                    name="Patrulla Roble",
-                    status_dot="bg-moss",
-                    summary="10 scouts. 100% mision recibida.",
-                ),
-                PatrolStatus(
-                    name="Patrulla Brasa",
-                    status_dot="bg-amber-500",
-                    summary="8 scouts. 2 respuestas retrasadas.",
-                ),
-                PatrolStatus(
-                    name="Patrulla Rio",
-                    status_dot="bg-rose-500",
-                    summary="12 scouts. Activar modo de reintento ligero.",
-                ),
-            ],
+            patrols=patrol_progress,
             certificate=certificate,
         )
 

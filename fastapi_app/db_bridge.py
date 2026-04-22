@@ -16,8 +16,20 @@ if not os.getenv("DJANGO_SETTINGS_MODULE"):
 
 django.setup()
 
-from apps.scouting.models import AuditLog, MatchCelebrationEvent, Patrol, PatrolMatch, Payment, PointLog, SteloCertification  # noqa: E402
+from apps.scouting.models import (  # noqa: E402
+    AuditLog,
+    MatchCelebrationEvent,
+    MCERCertificate,
+    Patrol,
+    PatrolMatch,
+    PatrolYouTubeSubmission,
+    Payment,
+    PointLog,
+    RoverIncident,
+    SteloCertification,
+)
 from apps.scouting.services.certification import check_and_issue_certification  # noqa: E402
+from apps.scouting.services.poentaro_engine import PoentaroEngine  # noqa: E402
 
 
 User = get_user_model()
@@ -34,6 +46,10 @@ def _serialize_patrol(patrol: Patrol | None) -> dict | None:
         "telegram_chat_id": patrol.telegram_chat_id,
         "training_points": patrol.training_points,
         "sel_points": patrol.sel_points,
+        "is_rover_moderator": patrol.is_rover_moderator,
+        "mcer_notified_a1": patrol.mcer_notified_a1,
+        "mcer_notified_a2": patrol.mcer_notified_a2,
+        "mcer_notified_b1": patrol.mcer_notified_b1,
     }
 
 
@@ -432,6 +448,43 @@ def award_points_by_chat(
                 result["consistency_bonus"] = {"awarded": True, "bonus_points": bonus_points}
                 result["sel_points"] = patrol.sel_points
 
+    # Compute composite progression score (PoentaroEngine) and trigger milestone flags.
+    engine = PoentaroEngine()
+    snapshot = engine.compute(patrol)
+    result["poentaro"] = {
+        "base_points": snapshot.base_points,
+        "daily_telegram_points": snapshot.daily_telegram_points,
+        "peer_validation_points": snapshot.peer_validation_points,
+        "leader_multiplier": snapshot.leader_multiplier,
+        "effective_score": snapshot.effective_score,
+        "mcer_level": snapshot.mcer_level,
+    }
+
+    reached_levels: list[str] = []
+    update_map: dict[str, object] = {}
+    now = timezone.now()
+
+    if snapshot.effective_score >= engine.THRESHOLD_A1 and not patrol.mcer_notified_a1:
+        reached_levels.append("A1")
+        update_map["mcer_notified_a1"] = True
+
+    if snapshot.effective_score >= engine.THRESHOLD_A2 and not patrol.mcer_notified_a2:
+        reached_levels.append("A2")
+        update_map["mcer_notified_a2"] = True
+
+    if snapshot.effective_score >= engine.THRESHOLD_B1 and not patrol.mcer_notified_b1:
+        reached_levels.append("B1")
+        update_map["mcer_notified_b1"] = True
+        update_map["sel_patch_prep_notified_at"] = now
+
+    if update_map:
+        Patrol.objects.filter(pk=patrol.pk).update(**update_map)
+
+    if reached_levels:
+        result["mcer_milestones"] = reached_levels
+        if "B1" in reached_levels:
+            result["notify_sel_patch_preparation"] = True
+
     return result
 
 
@@ -501,6 +554,106 @@ def create_payment(
         "payment_id": payment.id,
         "status": payment.status,
         "amount": amount_cents / 100,
+    }
+
+
+@sync_to_async
+def create_or_update_youtube_submission_by_chat(
+    chat_id: int,
+    *,
+    youtube_url: str,
+    validation_result: dict,
+    audit_result: dict,
+) -> dict:
+    patrol = Patrol.objects.filter(telegram_chat_id=chat_id).first()
+    if patrol is None:
+        return {"ok": False, "reason": "patrol_not_found"}
+
+    video_id = str(validation_result.get("video_id") or "").strip()
+    if not video_id:
+        return {"ok": False, "reason": "invalid_video_id"}
+
+    embed_url = str(validation_result.get("embed_url") or f"https://www.youtube.com/embed/{video_id}")
+    is_valid_metadata = bool(validation_result.get("valid"))
+    is_audit_pass = bool(audit_result.get("audit_valid"))
+
+    validation_status = (
+        PatrolYouTubeSubmission.ValidationStatus.VALID
+        if is_valid_metadata
+        else PatrolYouTubeSubmission.ValidationStatus.INVALID
+    )
+    audit_status = (
+        PatrolYouTubeSubmission.AuditStatus.PASSED
+        if is_audit_pass
+        else PatrolYouTubeSubmission.AuditStatus.FAILED
+    )
+
+    with transaction.atomic():
+        submission, _created = PatrolYouTubeSubmission.objects.update_or_create(
+            patrol=patrol,
+            defaults={
+                "youtube_url": youtube_url,
+                "video_id": video_id,
+                "embed_url": embed_url,
+                "validation_status": validation_status,
+                "validation_errors": list(validation_result.get("errors") or []),
+                "validation_warnings": list(validation_result.get("warnings") or []),
+                "metadata": dict(validation_result.get("metadata") or {}),
+                "audit_status": audit_status,
+                "audit_errors": list(audit_result.get("errors") or []),
+                "audit_findings": dict(audit_result.get("findings") or {}),
+                "validated_at": timezone.now() if is_valid_metadata else None,
+                "audited_at": timezone.now(),
+                "leader_approval_status": PatrolYouTubeSubmission.LeaderApprovalStatus.PENDING,
+                "leader_approval_notes": "",
+                "leader_approved_at": None,
+                "final_approved_at": None,
+                "approved_for_wall_of_fame": False,
+                "leader_notification_sent_at": timezone.now() if (is_valid_metadata and is_audit_pass) else None,
+            },
+        )
+
+    public_base = os.getenv("DJANGO_PUBLIC_BASE_URL", "http://localhost:8000").rstrip("/")
+    review_url = f"{public_base}/scouts/youtube/review/{submission.id}/"
+
+    return {
+        "ok": True,
+        "submission_id": submission.id,
+        "video_id": submission.video_id,
+        "embed_url": submission.embed_url,
+        "leader_approval_required": is_valid_metadata and is_audit_pass,
+        "leader_review_url": review_url,
+        "leader_email": patrol.leader_email,
+        "validation_status": submission.validation_status,
+        "audit_status": submission.audit_status,
+    }
+
+
+@sync_to_async
+def create_rover_incident_by_chat(chat_id: int, *, description: str) -> dict:
+    patrol = Patrol.objects.filter(telegram_chat_id=chat_id).first()
+    if patrol is None:
+        return {"ok": False, "reason": "patrol_not_found"}
+    if not patrol.is_rover_moderator:
+        return {"ok": False, "reason": "rover_only"}
+
+    summary = description.strip()
+    if not summary:
+        return {"ok": False, "reason": "empty_description"}
+
+    incident = RoverIncident.objects.create(
+        patrol=patrol,
+        reported_by_chat_id=chat_id,
+        description=summary,
+        priority="high",
+        status=RoverIncident.Status.OPEN,
+    )
+    return {
+        "ok": True,
+        "incident_id": incident.id,
+        "status": incident.status,
+        "priority": incident.priority,
+        "created_at": incident.created_at.isoformat(),
     }
 
 
@@ -669,3 +822,161 @@ def build_global_ranking(event_id: int | None = None, limit: int = 20) -> list[d
             }
         )
     return ranking
+
+
+@sync_to_async
+def get_or_create_mcer_certificate(chat_id: int) -> dict:
+    """
+    Get or create MCER certificate (Atestilo) for patrol by chat_id.
+    
+    Returns:
+        {
+            "ok": bool,
+            "certificate_id": int,
+            "patrol_name": str,
+            "sister_patrol_name": str,
+            "delegation_name": str,
+            "mcer_level": str,
+            "points": int,
+            "certification_code": str,
+            "qr_png_b64": str,
+            "match_start_date": str,
+            "leader_name": str,
+            "leader_email": str,
+            "with_watermark": bool,  # True if < 80% of B1 (2,401 pts)
+            "progress_to_b1_pct": int,  # Percentage to B1 threshold
+            "points_to_b1": int,  # Points remaining to reach B1
+        }
+    """
+    from apps.scouting.models import MCERCertificate  # Import here to avoid circular
+    
+    patrol = Patrol.objects.select_related("event").filter(telegram_chat_id=chat_id).first()
+    if patrol is None:
+        return {"ok": False, "reason": "patrol_not_found"}
+    
+    # Get sister patrol from patrol match
+    patrol_match = (
+        PatrolMatch.objects.filter(
+            Q(patrol_a=patrol) | Q(patrol_b=patrol),
+            status=PatrolMatch.Status.ACTIVE,
+        )
+        .select_related("patrol_a", "patrol_b")
+        .first()
+    )
+    
+    sister_patrol = None
+    match_start_date = None
+    if patrol_match:
+        sister_patrol = patrol_match.patrol_b if patrol_match.patrol_a_id == patrol.id else patrol_match.patrol_a
+        match_start_date = patrol_match.matched_at.date()
+    
+    # Calculate progress with PoentaroEngine
+    engine = PoentaroEngine()
+    snapshot = engine.compute(patrol)
+    
+    effective_points = snapshot.effective_score
+    mcer_level = snapshot.mcer_level
+    
+    # Calculate B1 progress (B1 starts at 3,001 pts)
+    B1_THRESHOLD = 3001
+    B1_80_PCT = 2401  # 80% of B1
+    
+    if effective_points >= B1_THRESHOLD:
+        progress_to_b1_pct = 100
+        points_to_b1 = 0
+    else:
+        progress_to_b1_pct = min(100, int((effective_points / B1_THRESHOLD) * 100))
+        points_to_b1 = max(0, B1_THRESHOLD - effective_points)
+    
+    with_watermark = effective_points < B1_80_PCT
+    
+    # Get or create certificate
+    cert = MCERCertificate.objects.filter(patrol=patrol).order_by("-issued_at").first()
+    
+    if cert is None or cert.points_at_issue < effective_points:
+        # Generate QR code
+        import qrcode
+        import base64
+        import io
+        
+        cert_code = f"MCER-{patrol.id}-{uuid.uuid4().hex[:8].upper()}"
+        wall_of_fame_url = f"{os.getenv('DJANGO_PUBLIC_BASE_URL', 'http://localhost:8000')}/scouts/wall-of-fame/"
+        
+        qr = qrcode.QRCode(version=1, box_size=10, border=2)
+        qr.add_data(wall_of_fame_url)
+        qr.make(fit=True)
+        
+        qr_img = qr.make_image(fill_color="black", back_color="white")
+        qr_buffer = io.BytesIO()
+        qr_img.save(qr_buffer, format="PNG")
+        qr_png_b64 = base64.b64encode(qr_buffer.getvalue()).decode("utf-8")
+        
+        cert = MCERCertificate.objects.create(
+            patrol=patrol,
+            sister_patrol=sister_patrol,
+            mcer_level=mcer_level,
+            points_at_issue=effective_points,
+            certification_code=cert_code,
+            qr_png_b64=qr_png_b64,
+            match_start_date=match_start_date,
+        )
+    else:
+        # Update preview tracking
+        cert.preview_requested_count += 1
+        cert.last_preview_requested_at = timezone.now()
+        cert.save(update_fields=["preview_requested_count", "last_preview_requested_at"])
+    
+    return {
+        "ok": True,
+        "certificate_id": cert.id,
+        "patrol_name": patrol.name,
+        "sister_patrol_name": sister_patrol.name if sister_patrol else "Sin patrulla hermana",
+        "delegation_name": patrol.delegation_name,
+        "mcer_level": mcer_level,
+        "points": effective_points,
+        "certification_code": cert.certification_code,
+        "qr_png_b64": cert.qr_png_b64,
+        "match_start_date": match_start_date.strftime("%d/%m/%Y") if match_start_date else "Sin fecha",
+        "leader_name": patrol.leader_name or "Scout Leader",
+        "leader_email": patrol.leader_email or "",
+        "with_watermark": with_watermark,
+        "progress_to_b1_pct": progress_to_b1_pct,
+        "points_to_b1": points_to_b1,
+    }
+
+
+@sync_to_async
+def notify_leader_certificate_preview(chat_id: int) -> dict:
+    """
+    Send email notification to leader when patrol requests /atestilo.
+    
+    Returns:
+        {"notified": bool, "leader_email": str}
+    """
+    from apps.scouting.models import MCERCertificate
+    
+    patrol = Patrol.objects.filter(telegram_chat_id=chat_id).first()
+    if patrol is None or not patrol.leader_email:
+        return {"notified": False, "leader_email": ""}
+    
+    cert = MCERCertificate.objects.filter(patrol=patrol).order_by("-issued_at").first()
+    if cert is None:
+        return {"notified": False, "leader_email": patrol.leader_email}
+    
+    # Check if we already notified recently (within 24 hours)
+    if cert.leader_notified_at:
+        time_since_last = timezone.now() - cert.leader_notified_at
+        if time_since_last < timedelta(hours=24):
+            return {"notified": False, "leader_email": patrol.leader_email, "reason": "recently_notified"}
+    
+    # Update notification timestamp
+    cert.leader_notified_at = timezone.now()
+    cert.save(update_fields=["leader_notified_at"])
+    
+    return {
+        "notified": True,
+        "leader_email": patrol.leader_email,
+        "patrol_name": patrol.name,
+        "points": cert.points_at_issue,
+        "mcer_level": cert.mcer_level,
+    }

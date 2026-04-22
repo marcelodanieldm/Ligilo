@@ -61,6 +61,8 @@ class PatrolStatus:
     name: str
     status_dot: str
     summary: str
+    telegram_link: str = ""
+    progress_label: str = ""
 
 
 @dataclass(frozen=True)
