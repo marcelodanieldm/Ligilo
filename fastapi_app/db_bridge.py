@@ -43,6 +43,91 @@ POINT_RULES = {
     PointLog.EventType.YOUTUBE_MISSION: 500,
 }
 
+# Stelo-Meter tier thresholds
+TIER_THRESHOLDS = {
+    "bronze": 500,
+    "silver": 1000,
+    "gold": 2000,
+}
+
+
+def _get_tier_progress_info(sel_points: int) -> dict:
+    """
+    Calculate current tier, progress percentage, and 50% milestone info.
+    Returns: {
+        current_tier: str,
+        current_threshold: int,
+        next_threshold: int,
+        progress_pct: int,
+        crossed_50_percent: bool,
+        previous_progress_pct: int (before this point award)
+    }
+    """
+    thresholds = [500, 1000, 2000]
+    
+    # Determine current tier bracket
+    current_threshold = 0
+    next_threshold = 500
+    
+    for threshold in thresholds:
+        if sel_points >= threshold:
+            current_threshold = threshold
+            # Find next threshold
+            next_idx = thresholds.index(threshold) + 1
+            next_threshold = thresholds[next_idx] if next_idx < len(thresholds) else threshold
+        else:
+            next_threshold = threshold
+            break
+    
+    # Calculate progress percentage in current bracket
+    bracket_start = current_threshold
+    bracket_end = next_threshold
+    bracket_size = bracket_end - bracket_start
+    
+    points_in_bracket = sel_points - bracket_start
+    progress_pct = min(100, max(0, (points_in_bracket * 100) // bracket_size))
+    
+    # Determine tier name
+    tier_map = {500: "bronze", 1000: "silver", 2000: "gold"}
+    current_tier = tier_map.get(current_threshold, "none")
+    
+    return {
+        "current_tier": current_tier,
+        "current_threshold": current_threshold,
+        "next_threshold": next_threshold,
+        "progress_pct": progress_pct,
+        "bracket_size": bracket_size,
+    }
+
+
+def _check_50_percent_milestone(previous_points: int, new_points: int) -> dict:
+    """
+    Check if 50% milestone was crossed between previous and new points.
+    Returns: {
+        crossed_50_percent: bool,
+        milestone_tier: str | None,
+        milestone_target_points: int | None,
+    }
+    """
+    prev_info = _get_tier_progress_info(previous_points)
+    new_info = _get_tier_progress_info(new_points)
+    
+    prev_pct = prev_info["progress_pct"]
+    new_pct = new_info["progress_pct"]
+    
+    # Check if we crossed 50% (going from <= 50% to >= 50%)
+    crossed = prev_pct < 50 and new_pct >= 50
+    
+    if crossed and new_info["current_tier"] != "none":
+        return {
+            "crossed_50_percent": True,
+            "milestone_tier": new_info["current_tier"],
+            "milestone_target_points": new_info["next_threshold"],
+            "current_points": new_points,
+        }
+    
+    return {"crossed_50_percent": False}
+
 
 @sync_to_async
 def get_patrol_by_chat_id(chat_id: int) -> dict | None:
@@ -296,6 +381,9 @@ def award_points_by_chat(
                 "sel_points": patrol.sel_points,
             }
 
+    # Capture points before award for milestone detection
+    previous_points = patrol.sel_points
+
     with transaction.atomic():
         PointLog.objects.create(
             patrol=patrol,
@@ -308,6 +396,11 @@ def award_points_by_chat(
 
     patrol.refresh_from_db(fields=["sel_points"])
     result = {"awarded": True, "reason": "ok", "points": points, "sel_points": patrol.sel_points}
+
+    # Check for 50% milestone (monetization trigger)
+    milestone_info = _check_50_percent_milestone(previous_points, patrol.sel_points)
+    if milestone_info.get("crossed_50_percent"):
+        result["milestone_50_percent"] = milestone_info
 
     # Check for consistency bonus: 3 audio submissions in the last 24 hours
     if event_type == PointLog.EventType.AUDIO_VALIDATED:

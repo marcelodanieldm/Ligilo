@@ -284,3 +284,65 @@ async def handle_payment_callback(update: Update, context: ContextTypes.DEFAULT_
         await query.answer("Stripe no está configurado", show_alert=True)
     except Exception as e:
         await query.answer(f"Error al crear sesión de pago: {str(e)[:50]}", show_alert=True)
+
+
+async def send_50_percent_milestone_message(
+    bot_instance,
+    chat_id: int,
+    patrol_name: str,
+    current_points: int,
+    target_points: int,
+    milestone_tier: str,
+) -> None:
+    """
+    Send celebratory message when scout reaches 50% of tier progression.
+    Organic monetization trigger: user is now "hooked" and more likely to convert.
+    
+    Tier map: bronze -> 500, silver -> 1000, gold -> 2000
+    """
+    tier_info = {
+        "bronze": {"emoji": "🥉", "name": "Bronce", "next_tier": "Plata"},
+        "silver": {"emoji": "🥈", "name": "Plata", "next_tier": "Oro"},
+        "gold": {"emoji": "🥇", "name": "Oro", "next_tier": "🏆 Leyenda"},
+    }
+    
+    tier_data = tier_info.get(milestone_tier, {"emoji": "⭐", "name": "Experto", "next_tier": "Siguiente"})
+    
+    keyboard = InlineKeyboardMarkup([
+        [
+            InlineKeyboardButton(
+                "🎟️ Activar Stelo Pass →",
+                callback_data=f"payment:stelo_pass:50_percent_cta"
+            )
+        ],
+        [
+            InlineKeyboardButton(
+                "Quizás después",
+                callback_data="dismiss"
+            )
+        ],
+    ])
+    
+    message_text = (
+        f"{tier_data['emoji']} *¡Increíble progreso!*\n\n"
+        f"Ya eres *medio-experto en Esperanto* 🌟\n\n"
+        f"Has alcanzado el *50% del camino* hacia tu parche {tier_data['name']}:\n"
+        f"`{current_points} / {target_points} puntos`\n\n"
+        f"*Ahora viene lo emocionante...* ✨\n"
+        f"¿Sabías que puedes asegurar tu parche físico de la SEL ya mismo?\n\n"
+        f"Con *Stelo Pass* obtienes:\n"
+        f"✅ Tu certificado digital con QR\n"
+        f"✅ Acceso a misiones avanzadas\n"
+        f"✅ Reconocimiento en la plataforma global SEL\n\n"
+        f"Activar ahora es solo *$3* y asegura tu logro."
+    )
+    
+    try:
+        await bot_instance.send_message(
+            chat_id=chat_id,
+            text=message_text,
+            parse_mode=ParseMode.MARKDOWN,
+            reply_markup=keyboard,
+        )
+    except Exception as e:
+        print(f"Failed to send 50% milestone message to {chat_id}: {e}")

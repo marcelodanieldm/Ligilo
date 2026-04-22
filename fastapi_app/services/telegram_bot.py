@@ -37,6 +37,7 @@ from fastapi_app.services.telegram_bot_sprint2 import (
     handle_pagi,
     handle_payment_callback,
     notify_sister_patrol_on_audio,
+    send_50_percent_milestone_message,
 )
 
 _telegram_app: Application | None = None
@@ -516,6 +517,18 @@ async def handle_voice_message(update: Update, context: ContextTypes.DEFAULT_TYP
         )
         # Sprint 2: Notify sister patrol about the audio
         await notify_sister_patrol_on_audio(update, patrol.get("id"))
+        
+        # Sprint 2: Monetization trigger - check 50% milestone
+        milestone_info = points_result.get("milestone_50_percent")
+        if milestone_info and milestone_info.get("crossed_50_percent"):
+            await send_50_percent_milestone_message(
+                bot_instance=update.effective_user.bot,
+                chat_id=chat_id,
+                patrol_name=patrol.get("name", "Patrulla"),
+                current_points=milestone_info.get("current_points", 0),
+                target_points=milestone_info.get("milestone_target_points", 0),
+                milestone_tier=milestone_info.get("milestone_tier", "bronze"),
+            )
 
 
 async def cancel_registration(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
