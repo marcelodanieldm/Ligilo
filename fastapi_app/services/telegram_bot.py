@@ -32,6 +32,12 @@ from fastapi_app.services.voice_pipeline import (
     download_and_convert_voice,
     extract_youtube_video_id,
 )
+from fastapi_app.services.telegram_bot_sprint2 import (
+    handle_miaj_punktoj,
+    handle_pagi,
+    handle_payment_callback,
+    notify_sister_patrol_on_audio,
+)
 
 _telegram_app: Application | None = None
 _init_lock = asyncio.Lock()
@@ -508,6 +514,8 @@ async def handle_voice_message(update: Update, context: ContextTypes.DEFAULT_TYP
         await update.message.reply_text(
             f"+50 puntos SEL por audio validado. Total: {points_result.get('sel_points', 0)}"
         )
+        # Sprint 2: Notify sister patrol about the audio
+        await notify_sister_patrol_on_audio(update, patrol.get("id"))
 
 
 async def cancel_registration(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
@@ -555,6 +563,9 @@ async def init_telegram_application() -> Application:
 
         app.add_handler(CommandHandler("status", handle_status))
         app.add_handler(CommandHandler("entregar", handle_entregar))
+        app.add_handler(CommandHandler("miaj_punktoj", handle_miaj_punktoj))
+        app.add_handler(CommandHandler("pagi", handle_pagi))
+        app.add_handler(CallbackQueryHandler(handle_payment_callback, pattern=r"^payment:"))
         app.add_handler(registration_handler)
         app.add_handler(MessageHandler(filters.VOICE, handle_voice_message))
         app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_linked_text))
