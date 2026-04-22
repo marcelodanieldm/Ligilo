@@ -9,10 +9,15 @@ router = APIRouter(prefix="/gamification", tags=["gamification"])
 
 class CertificationQRResponse(BaseModel):
     eligible: bool
+    tier: str | None = None
     current_points: int | None = None
     required_points: int | None = None
+    certification_code: str | None = None
+    profile_url: str | None = None
     qr_url: str | None = None
+    qr_png_b64: str | None = None
     payload: dict | None = None
+    renewed: bool = False
 
 
 class WeeklyReportResponse(BaseModel):
@@ -48,8 +53,13 @@ async def certification_qr(patrol_id: int) -> CertificationQRResponse:
 
     return CertificationQRResponse(
         eligible=True,
+        tier=result.get("tier"),
+        certification_code=result.get("certification_code"),
+        profile_url=result.get("profile_url"),
         qr_url=result.get("qr_url"),
+        qr_png_b64=result.get("qr_png_b64"),
         payload=result.get("payload"),
+        renewed=result.get("renewed", False),
     )
 
 

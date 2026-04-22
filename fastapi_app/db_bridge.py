@@ -2,7 +2,6 @@ import os
 import uuid
 from datetime import timedelta
 import json
-from urllib.parse import quote
 
 import django
 from asgiref.sync import sync_to_async
@@ -17,7 +16,8 @@ if not os.getenv("DJANGO_SETTINGS_MODULE"):
 
 django.setup()
 
-from apps.scouting.models import AuditLog, MatchCelebrationEvent, Patrol, PatrolMatch, Payment, PointLog  # noqa: E402
+from apps.scouting.models import AuditLog, MatchCelebrationEvent, Patrol, PatrolMatch, Payment, PointLog, SteloCertification  # noqa: E402
+from apps.scouting.services.certification import check_and_issue_certification  # noqa: E402
 
 
 User = get_user_model()
@@ -344,39 +344,39 @@ def award_points_by_chat(
 
 @sync_to_async
 def build_certification_qr_payload(patrol_id: int) -> dict:
+    """
+    Check milestone eligibility and issue/renew a Stelo certification.
+    Returns a unified dict compatible with the existing gamification router.
+    Thresholds: Bronze 500 / Silver 1000 / Gold 2000 pts.
+    """
     patrol = Patrol.objects.select_related("event").filter(pk=patrol_id).first()
     if patrol is None:
         return {"eligible": False, "reason": "patrol_not_found"}
 
-    total_logs = (
-        PointLog.objects.filter(patrol=patrol).aggregate(total=Sum("points")).get("total") or 0
-    )
-    effective_points = max(patrol.sel_points, int(total_logs))
-    if effective_points < 1000:
-        return {
-            "eligible": False,
-            "reason": "insufficient_points",
-            "current_points": effective_points,
-            "required_points": 1000,
-        }
+    result = check_and_issue_certification(patrol)
+    if not result.get("eligible"):
+        return result
 
-    issued_at = timezone.now().strftime("%Y-%m-%dT%H:%M:%SZ")
-    certification_code = f"SEL-{patrol.event_id:03d}-{patrol.id:04d}-{timezone.now().strftime('%Y%m%d')}"
-    payload = {
-        "certification_code": certification_code,
-        "patrol_id": patrol.id,
-        "patrol_name": patrol.name,
-        "delegation_name": patrol.delegation_name,
-        "event": patrol.event.name,
-        "points": effective_points,
-        "issued_at": issued_at,
-    }
-    qr_data = quote(json.dumps(payload, ensure_ascii=False), safe="")
-    qr_url = f"https://quickchart.io/qr?size=300&text={qr_data}"
+    # Build quickchart fallback QR URL at size=400 with ecLevel=H (matches service)
     return {
         "eligible": True,
-        "payload": payload,
-        "qr_url": qr_url,
+        "tier": result.get("tier"),
+        "certification_code": result.get("certification_code"),
+        "payload": {
+            "patrol_id": patrol.id,
+            "patrol_name": patrol.name,
+            "delegation_name": patrol.delegation_name,
+            "event": patrol.event.name,
+            "points": result.get("current_points"),
+            "tier": result.get("tier"),
+            "cert": result.get("certification_code"),
+            "issued_at": result.get("issued_at"),
+            "expires_at": result.get("expires_at"),
+        },
+        "qr_url": result.get("qr_fallback_url"),
+        "qr_png_b64": result.get("qr_png_b64"),
+        "profile_url": result.get("profile_url"),
+        "renewed": result.get("renewed", False),
     }
 
 

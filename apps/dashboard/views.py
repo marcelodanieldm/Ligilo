@@ -4,13 +4,13 @@ from urllib.parse import urlencode
 from django.contrib.auth.decorators import login_required
 from django.http import Http404, HttpRequest, HttpResponse, HttpResponseRedirect
 from django.urls import reverse
-from django.shortcuts import get_object_or_404
-from django.shortcuts import render
+from django.shortcuts import get_object_or_404, render
 from django.utils import timezone
 from django.utils.text import slugify
 
 from apps.dashboard.controllers.leader_dashboard_controller import LeaderDashboardController
-from apps.scouting.models import Patrol, Submission
+from apps.scouting.models import Patrol, PointLog, SteloCertification, Submission
+from apps.scouting.services.certification import check_and_issue_certification, verify_certification_token
 
 
 def _pdf_escape(text: str) -> str:
@@ -159,3 +159,97 @@ def share_patrol_certificate_telegram(request: HttpRequest) -> HttpResponse:
     )
     query = urlencode({"url": certificate_url, "text": share_text})
     return HttpResponseRedirect(f"https://t.me/share/url?{query}")
+
+
+def stelo_achievement_profile(request: HttpRequest, patrol_id: int) -> HttpResponse:
+    """
+    Public achievement profile page — no login required.
+    Linked from QR code; verifies the JWT token if present.
+    Scouts show this on their phone screen at the SEL stand to receive their patch.
+    """
+    patrol = get_object_or_404(
+        Patrol.objects.select_related("event"), pk=patrol_id, is_active=True
+    )
+    token = request.GET.get("token", "")
+    token_result: dict = {}
+    if token:
+        token_result = verify_certification_token(token)
+
+    cert: SteloCertification | None = SteloCertification.objects.filter(
+        patrol=patrol, revoked=False
+    ).first()
+
+    from datetime import timedelta
+    recent_logs = PointLog.objects.filter(
+        patrol=patrol,
+        created_at__gte=timezone.now() - timedelta(days=30),
+    ).order_by("-created_at")[:10]
+
+    tier_colors = {
+        SteloCertification.Tier.BRONZE: "#b45309",
+        SteloCertification.Tier.SILVER: "#64748b",
+        SteloCertification.Tier.GOLD: "#b45309",
+    }
+    tier_labels = {
+        SteloCertification.Tier.BRONZE: "🥉 Bronce",
+        SteloCertification.Tier.SILVER: "🥈 Plata",
+        SteloCertification.Tier.GOLD: "🥇 Oro",
+    }
+
+    context = {
+        "patrol": patrol,
+        "cert": cert,
+        "tier_label": tier_labels.get(cert.tier, cert.tier) if cert else None,
+        "tier_color": tier_colors.get(cert.tier, "#1e40af") if cert else "#1e40af",
+        "token_valid": token_result.get("valid"),
+        "token_reason": token_result.get("reason"),
+        "recent_logs": recent_logs,
+        "next_threshold": _next_threshold(patrol.sel_points),
+        "progress_pct": _progress_pct(patrol.sel_points),
+    }
+    return render(request, "ligilo/stelo_achievement_profile.html", context)
+
+
+@login_required
+def stelo_issue_qr(request: HttpRequest) -> HttpResponse:
+    """
+    Leader-authenticated endpoint: issue or renew the Stelo QR for the current patrol.
+    Returns JSON so it can be called from the Telegram bot or admin dashboard.
+    """
+    import json as _json
+    patrol_id = request.GET.get("patrol_id")
+    if not patrol_id:
+        raise Http404("patrol_id is required")
+
+    patrol = get_object_or_404(Patrol.objects.select_related("event"), pk=patrol_id)
+    result = check_and_issue_certification(patrol)
+    return HttpResponse(
+        _json.dumps(result, ensure_ascii=False),
+        content_type="application/json; charset=utf-8",
+    )
+
+
+def _next_threshold(points: int) -> int:
+    for t in (
+        SteloCertification.THRESHOLD_BRONZE,
+        SteloCertification.THRESHOLD_SILVER,
+        SteloCertification.THRESHOLD_GOLD,
+    ):
+        if points < t:
+            return t
+    return SteloCertification.THRESHOLD_GOLD
+
+
+def _progress_pct(points: int) -> int:
+    threshold = _next_threshold(points)
+    # Find the previous tier threshold
+    tiers = [0, SteloCertification.THRESHOLD_BRONZE, SteloCertification.THRESHOLD_SILVER, SteloCertification.THRESHOLD_GOLD]
+    prev = 0
+    for t in tiers:
+        if t < threshold:
+            prev = t
+    span = threshold - prev
+    earned = points - prev
+    if span <= 0:
+        return 100
+    return min(100, max(0, int(earned * 100 / span)))

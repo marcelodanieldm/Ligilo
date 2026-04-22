@@ -1,0 +1,307 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Perfil SEL — {{ patrol.name }}</title>
+  <style>
+    :root {
+      --brand: #1e3a5f;
+      --accent: {{ tier_color }};
+      --bg: #f8fafc;
+      --card: #ffffff;
+      --text: #1e293b;
+      --muted: #64748b;
+      --radius: 14px;
+    }
+
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: system-ui, -apple-system, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding: 1.5rem 1rem 3rem;
+    }
+
+    .card {
+      background: var(--card);
+      border-radius: var(--radius);
+      box-shadow: 0 4px 24px rgba(0,0,0,0.10);
+      padding: 2rem 1.75rem;
+      width: 100%;
+      max-width: 540px;
+      margin-bottom: 1.25rem;
+    }
+
+    .header {
+      text-align: center;
+      margin-bottom: 1.5rem;
+    }
+
+    .header .event-label {
+      font-size: 0.78rem;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.07em;
+      color: var(--brand);
+      margin-bottom: 0.4rem;
+    }
+
+    .header h1 {
+      font-size: 1.6rem;
+      font-weight: 800;
+      color: var(--brand);
+      line-height: 1.2;
+    }
+
+    .header .delegation {
+      color: var(--muted);
+      font-size: 0.92rem;
+      margin-top: 0.3rem;
+    }
+
+    /* --- Stelo-Meter gauge --- */
+    .stelo-meter {
+      margin: 1.25rem 0;
+    }
+
+    .stelo-meter-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: baseline;
+      margin-bottom: 0.5rem;
+    }
+
+    .stelo-meter-label {
+      font-size: 0.82rem;
+      font-weight: 600;
+      color: var(--muted);
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+    }
+
+    .stelo-meter-pts {
+      font-size: 1.4rem;
+      font-weight: 800;
+      color: var(--accent);
+    }
+
+    .progress-track {
+      background: #e2e8f0;
+      border-radius: 999px;
+      height: 18px;
+      overflow: hidden;
+    }
+
+    .progress-fill {
+      background: linear-gradient(90deg, var(--brand) 0%, var(--accent) 100%);
+      height: 100%;
+      border-radius: 999px;
+      width: {{ progress_pct }}%;
+      transition: width 0.6s ease;
+    }
+
+    .progress-meta {
+      display: flex;
+      justify-content: space-between;
+      font-size: 0.73rem;
+      color: var(--muted);
+      margin-top: 0.35rem;
+    }
+
+    /* --- Certification badge --- */
+    .cert-badge {
+      display: flex;
+      align-items: center;
+      gap: 1rem;
+      background: linear-gradient(135deg, var(--brand) 0%, #2563eb 100%);
+      color: #fff;
+      border-radius: var(--radius);
+      padding: 1rem 1.25rem;
+      margin-top: 1.25rem;
+    }
+
+    .cert-badge .tier-icon {
+      font-size: 2.2rem;
+      line-height: 1;
+    }
+
+    .cert-badge .cert-info h2 {
+      font-size: 1.05rem;
+      font-weight: 700;
+    }
+
+    .cert-badge .cert-info .cert-code {
+      font-family: monospace;
+      font-size: 0.78rem;
+      opacity: 0.85;
+      margin-top: 0.2rem;
+    }
+
+    .cert-badge .cert-info .cert-expires {
+      font-size: 0.72rem;
+      opacity: 0.7;
+      margin-top: 0.15rem;
+    }
+
+    .no-cert {
+      text-align: center;
+      padding: 1.25rem 0;
+      color: var(--muted);
+      font-size: 0.92rem;
+    }
+
+    /* --- Token validation pill --- */
+    .token-pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.4rem;
+      border-radius: 999px;
+      padding: 0.3rem 0.9rem;
+      font-size: 0.78rem;
+      font-weight: 700;
+      margin-top: 0.75rem;
+    }
+
+    .token-pill.valid   { background: #dcfce7; color: #166534; }
+    .token-pill.invalid { background: #fee2e2; color: #991b1b; }
+
+    /* --- Recent activity --- */
+    .section-title {
+      font-size: 0.82rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      color: var(--muted);
+      margin-bottom: 0.75rem;
+    }
+
+    .log-list {
+      list-style: none;
+      display: flex;
+      flex-direction: column;
+      gap: 0.45rem;
+    }
+
+    .log-item {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      font-size: 0.86rem;
+      padding: 0.45rem 0;
+      border-bottom: 1px solid #f1f5f9;
+    }
+
+    .log-item:last-child { border-bottom: none; }
+
+    .log-type {
+      color: var(--text);
+    }
+
+    .log-pts {
+      font-weight: 700;
+      color: #059669;
+      font-size: 0.82rem;
+    }
+
+    .log-date {
+      font-size: 0.72rem;
+      color: var(--muted);
+      margin-left: 0.5rem;
+    }
+
+    /* --- SEL brand footer --- */
+    footer {
+      text-align: center;
+      font-size: 0.75rem;
+      color: var(--muted);
+      margin-top: 0.5rem;
+    }
+
+    footer strong { color: var(--brand); }
+  </style>
+</head>
+<body>
+
+  <div class="card">
+    <div class="header">
+      <p class="event-label">{{ patrol.event.name }}</p>
+      <h1>{{ patrol.name }}</h1>
+      <p class="delegation">{{ patrol.delegation_name }} · {{ patrol.country_name }}</p>
+    </div>
+
+    <!-- Stelo-Meter progress bar -->
+    <div class="stelo-meter">
+      <div class="stelo-meter-header">
+        <span class="stelo-meter-label">Stelo-Meter</span>
+        <span class="stelo-meter-pts">{{ patrol.sel_points }} pts</span>
+      </div>
+      <div class="progress-track">
+        <div class="progress-fill"></div>
+      </div>
+      <div class="progress-meta">
+        <span>Nivel actual</span>
+        <span>Siguiente hito: {{ next_threshold }} pts</span>
+      </div>
+    </div>
+
+    <!-- Certification badge -->
+    {% if cert %}
+      <div class="cert-badge">
+        <div class="tier-icon">
+          {% if cert.tier == "gold" %}🥇{% elif cert.tier == "silver" %}🥈{% else %}🥉{% endif %}
+        </div>
+        <div class="cert-info">
+          <h2>Certificado SEL — {{ tier_label }}</h2>
+          <div class="cert-code">{{ cert.certification_code }}</div>
+          <div class="cert-expires">
+            Válido hasta {{ cert.expires_at|date:"d/m/Y" }}
+          </div>
+        </div>
+      </div>
+
+      <!-- JWT token validation result -->
+      {% if token_valid is not None %}
+        {% if token_valid %}
+          <span class="token-pill valid">✔ QR verificado — Autenticidad confirmada</span>
+        {% else %}
+          <span class="token-pill invalid">✖ QR inválido ({{ token_reason }})</span>
+        {% endif %}
+      {% endif %}
+    {% else %}
+      <div class="no-cert">
+        <p>Aún no alcanzaste el umbral de certificación ({{ next_threshold }} pts).</p>
+        <p style="margin-top:0.4rem">¡Sigue enviando audios y mensajes!</p>
+      </div>
+    {% endif %}
+  </div>
+
+  <!-- Recent activity -->
+  {% if recent_logs %}
+  <div class="card">
+    <p class="section-title">Actividad reciente (últimos 30 días)</p>
+    <ul class="log-list">
+      {% for log in recent_logs %}
+        <li class="log-item">
+          <span class="log-type">{{ log.get_event_type_display }}</span>
+          <span>
+            <span class="log-pts">+{{ log.points }}</span>
+            <span class="log-date">{{ log.created_at|date:"d/m" }}</span>
+          </span>
+        </li>
+      {% endfor %}
+    </ul>
+  </div>
+  {% endif %}
+
+  <footer>
+    Generado por <strong>Ligilo · SEL</strong> — Scout Esperanto Ligo
+  </footer>
+
+</body>
+</html>

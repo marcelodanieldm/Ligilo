@@ -341,3 +341,51 @@ class Payment(models.Model):
                     "Pagos completados deben tener una referencia de transaccion."
                 )
 
+
+class SteloCertification(models.Model):
+    """
+    Tracks issued Stelo-Meter certifications.
+    One record per patrol (unique), regenerated on milestone upgrades.
+    """
+
+    THRESHOLD_BRONZE = 500
+    THRESHOLD_SILVER = 1000
+    THRESHOLD_GOLD = 2000
+
+    class Tier(models.TextChoices):
+        BRONZE = "bronze", "Bronce (500 pts)"
+        SILVER = "silver", "Plata (1000 pts)"
+        GOLD = "gold", "Oro (2000 pts)"
+
+    patrol = models.OneToOneField(
+        Patrol, on_delete=models.CASCADE, related_name="stelo_certification"
+    )
+    tier = models.CharField(max_length=10, choices=Tier.choices)
+    points_at_issue = models.PositiveIntegerField()
+    certification_code = models.CharField(max_length=60, unique=True)
+    jwt_token = models.TextField()  # Signed JWT embedded in QR
+    qr_png_b64 = models.TextField(blank=True)  # Base64-encoded PNG for offline display
+    issued_at = models.DateTimeField(auto_now_add=True)
+    expires_at = models.DateTimeField()
+    revoked = models.BooleanField(default=False)
+
+    class Meta:
+        ordering = ["-issued_at"]
+        indexes = [
+            models.Index(fields=["certification_code"]),
+            models.Index(fields=["patrol", "-issued_at"]),
+        ]
+
+    def __str__(self) -> str:
+        return f"SteloCert({self.patrol.name}, {self.tier}, {self.certification_code})"
+
+    @classmethod
+    def tier_for_points(cls, points: int) -> str | None:
+        if points >= cls.THRESHOLD_GOLD:
+            return cls.Tier.GOLD
+        if points >= cls.THRESHOLD_SILVER:
+            return cls.Tier.SILVER
+        if points >= cls.THRESHOLD_BRONZE:
+            return cls.Tier.BRONZE
+        return None
+

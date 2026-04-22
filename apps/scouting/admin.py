@@ -18,6 +18,7 @@ from apps.scouting.models import (
     Patrol,
     PatrolMatch,
     PointLog,
+    SteloCertification,
     Submission,
 )
 
@@ -267,6 +268,7 @@ class PatrolAdmin(admin.ModelAdmin):
         "invitation_token",
         "training_points",
         "sel_points",
+        "stelo_meter_tier",
         "leader_name",
         "is_active",
     )
@@ -280,6 +282,21 @@ class PatrolAdmin(admin.ModelAdmin):
         "invitation_token",
     )
     actions = (create_valid_match, regenerate_invitation_token)
+
+    @admin.display(description="Stelo-Meter")
+    def stelo_meter_tier(self, obj: Patrol) -> str:
+        try:
+            cert = obj.stelo_certification
+            if cert.revoked:
+                return "—"
+            icons = {"bronze": "🥉 Bronce", "silver": "🥈 Plata", "gold": "🥇 Oro"}
+            return icons.get(cert.tier, cert.tier)
+        except Patrol.stelo_certification.RelatedObjectDoesNotExist:
+            from apps.scouting.models import SteloCertification
+            tier = SteloCertification.tier_for_points(obj.sel_points)
+            if tier is None:
+                return f"— ({obj.sel_points} pts)"
+            return f"⏳ pendiente {tier}"
 
 
 @admin.register(PatrolMatch)
@@ -400,6 +417,34 @@ class PaymentAdmin(admin.ModelAdmin):
     def amount_display(self, obj: Payment) -> str:
         return f"${obj.amount_cents / 100:.2f} {obj.currency}"
     amount_display.short_description = "Monto"
+
+    def has_add_permission(self, request: HttpRequest) -> bool:
+        return False
+
+
+@admin.register(SteloCertification)
+class SteloCertificationAdmin(admin.ModelAdmin):
+    list_display = (
+        "issued_at",
+        "patrol",
+        "tier",
+        "points_at_issue",
+        "certification_code",
+        "revoked",
+        "expires_at",
+    )
+    list_filter = ("tier", "revoked", "issued_at")
+    search_fields = ("patrol__name", "patrol__delegation_name", "certification_code")
+    readonly_fields = (
+        "issued_at",
+        "patrol",
+        "tier",
+        "points_at_issue",
+        "certification_code",
+        "jwt_token",
+        "qr_png_b64",
+        "expires_at",
+    )
 
     def has_add_permission(self, request: HttpRequest) -> bool:
         return False
