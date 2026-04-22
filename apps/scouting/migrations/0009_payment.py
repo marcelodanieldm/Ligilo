@@ -35,10 +35,10 @@ class Migration(migrations.Migration):
         ),
         migrations.AddIndex(
             model_name='payment',
-            index=models.Index(fields=['patrol', '-created_at'], name='scouting_payment_patrol_ca0f4b_idx'),
+            index=models.Index(fields=['patrol', '-created_at'], name='scouting_pa_patrol__23d8ba_idx'),
         ),
         migrations.AddIndex(
             model_name='payment',
-            index=models.Index(fields=['status', '-created_at'], name='scouting_payment_status_ca0f4b_idx'),
+            index=models.Index(fields=['status', '-created_at'], name='scouting_pa_status_a4317b_idx'),
         ),
     ]

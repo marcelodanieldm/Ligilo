@@ -338,3 +338,4 @@ class Payment(models.Model):
                 raise ValidationError(
                     "Pagos completados deben tener una referencia de transaccion."
                 )
+
