@@ -372,8 +372,8 @@ class SteloCertification(models.Model):
     class Meta:
         ordering = ["-issued_at"]
         indexes = [
-            models.Index(fields=["certification_code"]),
-            models.Index(fields=["patrol", "-issued_at"]),
+            models.Index(fields=["certification_code"], name="scouting_st_certifi_476378_idx"),
+            models.Index(fields=["patrol", "-issued_at"], name="scouting_st_patrol__94728f_idx"),
         ]
 
     def __str__(self) -> str:

@@ -42,10 +42,10 @@ class Migration(migrations.Migration):
         ),
         migrations.AddIndex(
             model_name='stelocertification',
-            index=models.Index(fields=['certification_code'], name='scouting_st_certifi_idx'),
+            index=models.Index(fields=['certification_code'], name='scouting_st_certifi_476378_idx'),
         ),
         migrations.AddIndex(
             model_name='stelocertification',
-            index=models.Index(fields=['patrol', '-issued_at'], name='scouting_st_patrol_idx'),
+            index=models.Index(fields=['patrol', '-issued_at'], name='scouting_st_patrol__94728f_idx'),
         ),
     ]
