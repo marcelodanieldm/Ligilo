@@ -1,13 +1,17 @@
 import json
+import csv
 import uuid
+import io
 from datetime import timedelta
 
 from django.contrib import admin, messages
 from django.core.exceptions import ValidationError
 from django.db.models import Count, Sum
-from django.http import HttpRequest, JsonResponse
+from django.http import HttpRequest, HttpResponse, JsonResponse
 from django.urls import path, reverse
 from django.utils import timezone
+
+import qrcode
 
 from apps.scouting.models import (
     AuditLog,
@@ -17,7 +21,9 @@ from apps.scouting.models import (
     Payment,
     Patrol,
     PatrolMatch,
+    PatrolYouTubeSubmission,
     PointLog,
+    RoverIncident,
     SteloCertification,
     Submission,
 )
@@ -195,6 +201,198 @@ def _build_weekly_report_payload(patrol_id: int) -> dict:
 
 def admin_weekly_report_data(_request: HttpRequest, patrol_id: int) -> JsonResponse:
     return JsonResponse(_build_weekly_report_payload(patrol_id))
+
+
+def _build_funds_summary() -> dict:
+    completed = Payment.objects.filter(status=Payment.Status.COMPLETED)
+    total_cents = completed.aggregate(total=Sum("amount_cents")).get("total") or 0
+    paid_patrols = completed.values("patrol_id").distinct().count()
+    total_payments = completed.count()
+    return {
+        "total_cents": total_cents,
+        "total_usd": total_cents / 100,
+        "paid_patrols": paid_patrols,
+        "total_payments": total_payments,
+    }
+
+
+def admin_funds_report_csv(_request: HttpRequest) -> HttpResponse:
+    """
+    Downloadable cierre de caja report for SEL accounting.
+    """
+    completed = (
+        Payment.objects.filter(status=Payment.Status.COMPLETED)
+        .select_related("patrol", "patrol__event")
+        .order_by("-completed_at", "-created_at")
+    )
+    summary = _build_funds_summary()
+
+    response = HttpResponse(content_type="text/csv; charset=utf-8")
+    timestamp = timezone.localtime().strftime("%Y%m%d_%H%M")
+    response["Content-Disposition"] = f'attachment; filename="fondos_recaudados_{timestamp}.csv"'
+
+    writer = csv.writer(response)
+    writer.writerow(["Reporte", "Fondos Recaudados (SEL)"])
+    writer.writerow(["Generado", timezone.localtime().strftime("%d/%m/%Y %H:%M")])
+    writer.writerow(["Total USD", f"{summary['total_usd']:.2f}"])
+    writer.writerow(["Pagos completados", summary["total_payments"]])
+    writer.writerow(["Patrullas pagadas", summary["paid_patrols"]])
+    writer.writerow([])
+    writer.writerow(
+        [
+            "payment_id",
+            "completed_at",
+            "event",
+            "delegacion",
+            "patrulla",
+            "producto",
+            "metodo",
+            "estado",
+            "monto_usd",
+            "currency",
+            "stripe_id",
+            "paypal_id",
+        ]
+    )
+
+    for payment in completed:
+        completed_at = payment.completed_at or payment.updated_at or payment.created_at
+        writer.writerow(
+            [
+                payment.id,
+                timezone.localtime(completed_at).strftime("%d/%m/%Y %H:%M"),
+                payment.patrol.event.name,
+                payment.patrol.delegation_name,
+                payment.patrol.name,
+                payment.product_type,
+                payment.payment_method,
+                payment.status,
+                f"{payment.amount_cents / 100:.2f}",
+                payment.currency,
+                payment.stripe_payment_intent_id,
+                payment.paypal_transaction_id,
+            ]
+        )
+
+    return response
+
+
+def _build_paid_patch_rows(request: HttpRequest) -> list[dict]:
+    payments = (
+        Payment.objects.filter(
+            status=Payment.Status.COMPLETED,
+            product_type=Payment.ProductType.STELO_PASS,
+        )
+        .select_related("patrol", "patrol__event")
+        .order_by("patrol__delegation_name", "patrol__name")
+    )
+
+    rows = []
+    seen_patrols: set[int] = set()
+    for payment in payments:
+        if payment.patrol_id in seen_patrols:
+            continue
+        seen_patrols.add(payment.patrol_id)
+
+        cert = SteloCertification.objects.filter(patrol_id=payment.patrol_id, revoked=False).first()
+        if cert:
+            qr_url = request.build_absolute_uri(
+                reverse("dashboard:stelo-achievement-profile", args=[payment.patrol_id])
+            )
+            if cert.jwt_token:
+                qr_url = f"{qr_url}?token={cert.jwt_token}"
+            cert_code = cert.certification_code
+        else:
+            qr_url = request.build_absolute_uri(
+                reverse("dashboard:stelo-achievement-profile", args=[payment.patrol_id])
+            )
+            cert_code = "PENDIENTE_CERTIFICACION"
+
+        rows.append(
+            {
+                "event": payment.patrol.event.name,
+                "delegation": payment.patrol.delegation_name,
+                "patrol": payment.patrol.name,
+                "leader": payment.patrol.leader_name,
+                "cert_code": cert_code,
+                "qr_url": qr_url,
+            }
+        )
+    return rows
+
+
+def admin_paid_patrols_logistics_pdf(request: HttpRequest) -> HttpResponse:
+    """
+    PDF list for physical SEL stand logistics with paid patrols and QR per patrol.
+    """
+    try:
+        from reportlab.lib.pagesizes import A4
+        from reportlab.lib.utils import ImageReader
+        from reportlab.pdfgen import canvas
+    except Exception:
+        return HttpResponse(
+            "No se pudo generar el PDF: falta la dependencia reportlab. "
+            "Instala requirements.txt en este entorno.",
+            status=503,
+            content_type="text/plain; charset=utf-8",
+        )
+
+    rows = _build_paid_patch_rows(request)
+
+    buffer = io.BytesIO()
+    pdf = canvas.Canvas(buffer, pagesize=A4)
+    width, height = A4
+
+    y = height - 45
+    pdf.setFont("Helvetica-Bold", 14)
+    pdf.drawString(40, y, "SEL - Lista de Entrega de Parches (Patrullas Pagadas)")
+    y -= 18
+    pdf.setFont("Helvetica", 10)
+    pdf.drawString(40, y, f"Generado: {timezone.localtime().strftime('%d/%m/%Y %H:%M')}")
+    y -= 22
+
+    if not rows:
+        pdf.setFont("Helvetica", 11)
+        pdf.drawString(40, y, "No hay patrullas pagadas con Stelo Pass para listar.")
+        pdf.showPage()
+        pdf.save()
+        buffer.seek(0)
+        response = HttpResponse(buffer.getvalue(), content_type="application/pdf")
+        response["Content-Disposition"] = 'attachment; filename="lista_entrega_parches.pdf"'
+        return response
+
+    for idx, row in enumerate(rows, start=1):
+        if y < 130:
+            pdf.showPage()
+            y = height - 45
+
+        pdf.setFont("Helvetica-Bold", 10)
+        pdf.drawString(40, y, f"{idx}. {row['delegation']} / {row['patrol']}")
+        y -= 13
+        pdf.setFont("Helvetica", 9)
+        pdf.drawString(48, y, f"Evento: {row['event']}")
+        y -= 12
+        pdf.drawString(48, y, f"Lider responsable: {row['leader']}")
+        y -= 12
+        pdf.drawString(48, y, f"Codigo certificacion: {row['cert_code']}")
+
+        qr_img = qrcode.make(row["qr_url"])
+        qr_reader = ImageReader(qr_img)
+        pdf.drawImage(qr_reader, width - 125, y - 10, width=75, height=75, mask="auto")
+
+        y -= 20
+        pdf.setFont("Helvetica-Oblique", 8)
+        pdf.drawString(48, y, row["qr_url"][:110])
+        y -= 30
+        pdf.line(40, y, width - 40, y)
+        y -= 16
+
+    pdf.save()
+    buffer.seek(0)
+    response = HttpResponse(buffer.getvalue(), content_type="application/pdf")
+    timestamp = timezone.localtime().strftime("%Y%m%d_%H%M")
+    response["Content-Disposition"] = f'attachment; filename="lista_entrega_parches_{timestamp}.pdf"'
+    return response
 
 
 class MissionInline(admin.TabularInline):
@@ -450,6 +648,54 @@ class SteloCertificationAdmin(admin.ModelAdmin):
         return False
 
 
+@admin.register(PatrolYouTubeSubmission)
+class PatrolYouTubeSubmissionAdmin(admin.ModelAdmin):
+    list_display = (
+        "submitted_at",
+        "patrol",
+        "video_id",
+        "validation_status",
+        "audit_status",
+        "leader_approval_status",
+        "approved_for_wall_of_fame",
+    )
+    list_filter = (
+        "validation_status",
+        "audit_status",
+        "leader_approval_status",
+        "approved_for_wall_of_fame",
+        "submitted_at",
+    )
+    search_fields = (
+        "patrol__name",
+        "patrol__delegation_name",
+        "video_id",
+        "youtube_url",
+    )
+    readonly_fields = (
+        "submitted_at",
+        "validated_at",
+        "audited_at",
+        "leader_notification_sent_at",
+        "leader_approved_at",
+        "final_approved_at",
+    )
+
+
+@admin.register(RoverIncident)
+class RoverIncidentAdmin(admin.ModelAdmin):
+    list_display = (
+        "created_at",
+        "patrol",
+        "priority",
+        "status",
+        "reported_by_chat_id",
+    )
+    list_filter = ("status", "priority", "created_at")
+    search_fields = ("patrol__name", "patrol__delegation_name", "description")
+    readonly_fields = ("created_at", "reported_by_chat_id")
+
+
 def _patch_admin_index() -> None:
     if getattr(admin.site, "_ligilo_dashboard_patched", False):
         return
@@ -461,6 +707,7 @@ def _patch_admin_index() -> None:
         context = original_each_context(request)
         alerts = _build_security_alert_rows(limit=25)
         ranking = _build_global_ranking_payload(limit=20)
+        funds = _build_funds_summary()
         context.update(
             {
                 "scouting_traffic_chart_url": reverse("admin:scouting_traffic_data"),
@@ -468,6 +715,11 @@ def _patch_admin_index() -> None:
                 "scouting_global_ranking": ranking,
                 "scouting_security_alerts": alerts,
                 "scouting_security_alert_total": len(alerts),
+                "scouting_funds_report_url": reverse("admin:scouting_funds_report"),
+                "scouting_paid_patches_pdf_url": reverse("admin:scouting_paid_patches_pdf"),
+                "scouting_funds_total_usd": f"{funds['total_usd']:.2f}",
+                "scouting_funds_total_payments": funds["total_payments"],
+                "scouting_funds_total_patrols": funds["paid_patrols"],
             }
         )
         return context
@@ -488,6 +740,16 @@ def _patch_admin_index() -> None:
                 "analytics/weekly-report/<int:patrol_id>/",
                 admin.site.admin_view(admin_weekly_report_data),
                 name="scouting_weekly_report",
+            ),
+            path(
+                "analytics/funds-report/",
+                admin.site.admin_view(admin_funds_report_csv),
+                name="scouting_funds_report",
+            ),
+            path(
+                "analytics/paid-patrols-logistics-pdf/",
+                admin.site.admin_view(admin_paid_patrols_logistics_pdf),
+                name="scouting_paid_patches_pdf",
             ),
         ]
         return extra_urls + original_get_urls()

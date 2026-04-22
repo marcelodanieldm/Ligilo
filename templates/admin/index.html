@@ -108,6 +108,50 @@
       font-size: 0.85rem;
       margin: 0;
     }
+
+    .funds-grid {
+      display: grid;
+      gap: 0.8rem;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      margin-top: 0.8rem;
+    }
+
+    .funds-box {
+      border: 1px solid #d1fae5;
+      border-radius: 10px;
+      padding: 0.7rem;
+      background: #ecfdf5;
+    }
+
+    .funds-value {
+      font-size: 1.1rem;
+      font-weight: 700;
+      color: #065f46;
+    }
+
+    .admin-actions {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.6rem;
+      margin-top: 0.9rem;
+    }
+
+    .admin-btn {
+      display: inline-block;
+      padding: 0.45rem 0.75rem;
+      border-radius: 8px;
+      border: 1px solid #065f46;
+      background: #065f46;
+      color: #fff;
+      text-decoration: none;
+      font-weight: 600;
+      font-size: 0.85rem;
+    }
+
+    .admin-btn.secondary {
+      background: #1f2937;
+      border-color: #1f2937;
+    }
   </style>
 {% endblock %}
 
@@ -117,6 +161,26 @@
       <article class="analytics-card">
         <h2 class="analytics-title">Patrullas Registradas vs. Patrullas con Match</h2>
         <canvas id="trafficChart" height="120" aria-label="Grafico de patrullas" role="img"></canvas>
+
+        <div class="funds-grid">
+          <div class="funds-box">
+            <div class="funds-value">USD {{ scouting_funds_total_usd }}</div>
+            <div>Total recaudado</div>
+          </div>
+          <div class="funds-box">
+            <div class="funds-value">{{ scouting_funds_total_payments }}</div>
+            <div>Pagos completados</div>
+          </div>
+          <div class="funds-box">
+            <div class="funds-value">{{ scouting_funds_total_patrols }}</div>
+            <div>Patrullas pagadas</div>
+          </div>
+        </div>
+
+        <div class="admin-actions">
+          <a class="admin-btn" href="{{ scouting_funds_report_url }}">Descargar Fondos Recaudados (CSV)</a>
+          <a class="admin-btn secondary" href="{{ scouting_paid_patches_pdf_url }}">Descargar Lista Entrega + QR (PDF)</a>
+        </div>
       </article>
 
       <article class="analytics-card">
