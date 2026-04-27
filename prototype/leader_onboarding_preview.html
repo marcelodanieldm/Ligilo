@@ -1,0 +1,404 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Ligilo · Onboarding del lider</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          colors: {
+            pine: '#26413c',
+            moss: '#56704f',
+            bark: '#6a4a3c',
+            ember: '#b26836',
+            canvas: '#efe6d2',
+            fog: '#f8f4ea',
+            charcoal: '#1f2933',
+            sage: '#c5cfb7'
+          },
+          boxShadow: {
+            card: '0 14px 36px rgba(38, 65, 60, 0.12)'
+          },
+          borderRadius: {
+            camp: '1.5rem'
+          }
+        }
+      }
+    }
+  </script>
+  <style>
+    body {
+      font-family: "Iowan Old Style", "Palatino Linotype", "Book Antiqua", Georgia, serif;
+      background:
+        radial-gradient(circle at top left, rgba(178, 104, 54, 0.14), transparent 24%),
+        radial-gradient(circle at bottom right, rgba(86, 112, 79, 0.12), transparent 20%),
+        linear-gradient(135deg, #f8f4ea 0%, #efe6d2 54%, #e4d6b8 100%);
+      color: #1f2933;
+      min-height: 100vh;
+    }
+
+    .step-card { display: none; }
+    .step-card.active { display: block; }
+
+    .field {
+      margin-top: 4px;
+      width: 100%;
+      border-radius: 0.9rem;
+      border: 1px solid rgba(38, 65, 60, 0.18);
+      background: #f8f4ea;
+      padding: 0.6rem 0.8rem;
+      font-size: 0.875rem;
+      color: #1f2933;
+      outline: none;
+    }
+
+    .field:focus {
+      border-color: #26413c;
+      background: white;
+    }
+
+    .pill {
+      border-radius: 999px;
+      border: 1px solid rgba(38, 65, 60, 0.2);
+      background: #f8f4ea;
+      padding: 0.35rem 0.75rem;
+      font-size: 0.75rem;
+      font-weight: 600;
+      color: #26413c;
+      cursor: pointer;
+      user-select: none;
+    }
+
+    .pill.active {
+      background: #26413c;
+      border-color: #26413c;
+      color: #f8f4ea;
+    }
+    .step-card { transition: opacity .22s ease, transform .22s ease; }
+    #toast-container .toast { transition: opacity .25s ease, transform .25s ease; }
+  </style>
+</head>
+<body>
+  <div id="toast-container" class="fixed bottom-6 right-6 z-50 flex flex-col-reverse gap-2 items-end pointer-events-none"></div>
+
+<nav class="sticky top-0 z-20 border-b border-pine/10 bg-fog/80 backdrop-blur-sm">
+    <div class="mx-auto flex max-w-6xl items-center justify-between px-4 py-3">
+      <div class="text-xs font-semibold uppercase tracking-[0.3em] text-moss">Ligilo Scout SaaS</div>
+      <div class="text-xs text-charcoal/60">Onboarding del lider</div>
+    </div>
+  </nav>
+
+  <main class="mx-auto max-w-6xl px-4 py-8">
+    <header class="rounded-[2rem] border border-pine/10 bg-white/80 p-6 shadow-card">
+      <p class="text-xs uppercase tracking-[0.28em] text-moss">Arranque operativo</p>
+      <h1 class="mt-2 text-3xl font-semibold text-pine">Configuracion inicial del lider</h1>
+      <p class="mt-2 text-sm text-charcoal/80">Completa estos pasos para habilitar invitaciones de patrulla, nodo Telegram y seguimiento del onboarding desde el dashboard.</p>
+
+      <div class="mt-5 grid gap-3 md:grid-cols-4">
+        <button id="crumb-0" onclick="goStep(0)" class="rounded-full border border-pine bg-pine px-4 py-2 text-sm font-semibold text-white">1. Perfil</button>
+        <button id="crumb-1" onclick="goStep(1)" class="rounded-full border border-pine/20 bg-white px-4 py-2 text-sm font-semibold text-pine/60">2. Evento</button>
+        <button id="crumb-2" onclick="goStep(2)" class="rounded-full border border-pine/20 bg-white px-4 py-2 text-sm font-semibold text-pine/60">3. Patrullas</button>
+        <button id="crumb-3" onclick="goStep(3)" class="rounded-full border border-pine/20 bg-white px-4 py-2 text-sm font-semibold text-pine/60">4. Activacion</button>
+      </div>
+      <!-- PROGRESS BAR -->
+      <div class="mt-4 h-1.5 w-full rounded-full bg-pine/10 overflow-hidden">
+        <div id="step-progress" class="h-full rounded-full bg-gradient-to-r from-moss to-pine transition-all duration-500 ease-out" style="width:25%"></div>
+      </div>
+    </header>
+
+    <section class="mt-6">
+      <article id="step-0" class="step-card active rounded-[2rem] border border-pine/10 bg-white p-6 shadow-card">
+        <h2 class="text-xl font-semibold text-pine">Paso 1: Perfil del lider</h2>
+        <p class="mt-1 text-sm text-charcoal/70">Estos datos alimentan la identidad del panel y los mensajes de certificacion.</p>
+
+        <div class="mt-4 grid gap-4 md:grid-cols-2">
+          <label class="text-sm font-semibold text-pine">Nombre completo
+            <input class="field" type="text" value="Akela Marcos Dominguez" />
+          </label>
+          <label class="text-sm font-semibold text-pine">Correo del lider
+            <input class="field" type="email" value="akela.andalucia@ligilo.org" />
+          </label>
+          <label class="text-sm font-semibold text-pine">Delegacion
+            <input class="field" type="text" value="Delegacion Andalucia" />
+          </label>
+          <label class="text-sm font-semibold text-pine">Pais
+            <input class="field" type="text" value="España" />
+          </label>
+        </div>
+
+        <div class="mt-5 rounded-2xl border border-dashed border-pine/20 bg-fog p-3 text-xs text-charcoal/60">
+          El avatar del sidebar usa la inicial del lider y la delegacion define el alcance de patrullas para monitoreo.
+        </div>
+
+        <div class="mt-6 flex justify-end">
+          <button onclick="goStep(1)" class="rounded-2xl bg-pine px-5 py-3 text-sm font-semibold text-white">Guardar y seguir</button>
+        </div>
+      </article>
+
+      <article id="step-1" class="step-card rounded-[2rem] border border-pine/10 bg-white p-6 shadow-card">
+        <h2 class="text-xl font-semibold text-pine">Paso 2: Configurar evento y reglas</h2>
+        <p class="mt-1 text-sm text-charcoal/70">Define el contexto internacional para Poentaro, certificados y embudo.</p>
+
+        <div class="mt-4 grid gap-4 md:grid-cols-2">
+          <label class="text-sm font-semibold text-pine">Evento internacional
+            <select class="field">
+              <option>Jamboree Andalucia 2026</option>
+              <option>Eurocamp 2026</option>
+              <option>World Scout Jamboree 2027</option>
+            </select>
+          </label>
+          <label class="text-sm font-semibold text-pine">Idioma puente
+            <select class="field">
+              <option>Esperanto</option>
+              <option>Ingles</option>
+              <option>Portugues</option>
+            </select>
+          </label>
+        </div>
+
+        <div class="mt-4">
+          <p class="text-sm font-semibold text-pine">Canales de aprendizaje activos</p>
+          <div class="mt-2 flex flex-wrap gap-2" id="channels">
+            <span class="pill active" onclick="togglePill(this)">Texto</span>
+            <span class="pill active" onclick="togglePill(this)">Audio</span>
+            <span class="pill active" onclick="togglePill(this)">YouTube</span>
+            <span class="pill" onclick="togglePill(this)">Documento PDF</span>
+          </div>
+        </div>
+
+        <div class="mt-4 rounded-2xl bg-canvas p-4 text-sm text-charcoal/80">
+          Reglas por defecto:
+          <ul class="mt-2 list-disc pl-5">
+            <li>Patrullas por nodo: maximo 3</li>
+            <li>Personas por nodo (sin bot): maximo 15</li>
+            <li>Puntos diarios por participacion completa: +30</li>
+          </ul>
+        </div>
+
+        <div class="mt-6 flex justify-between">
+          <button onclick="goStep(0)" class="rounded-2xl border border-pine px-5 py-3 text-sm font-semibold text-pine">Volver</button>
+          <button onclick="goStep(2)" class="rounded-2xl bg-pine px-5 py-3 text-sm font-semibold text-white">Guardar y seguir</button>
+        </div>
+      </article>
+
+      <article id="step-2" class="step-card rounded-[2rem] border border-pine/10 bg-white p-6 shadow-card">
+        <h2 class="text-xl font-semibold text-pine">Paso 3: Registrar patrullas e invitaciones</h2>
+        <p class="mt-1 text-sm text-charcoal/70">Genera enlaces unicos para onboarding A/B/C de cada patrulla.</p>
+
+        <div class="mt-4 overflow-x-auto rounded-2xl border border-pine/10">
+          <table class="w-full text-sm">
+            <thead class="bg-fog text-xs uppercase tracking-[0.2em] text-charcoal/60">
+              <tr>
+                <th class="px-4 py-3 text-left">Patrulla</th>
+                <th class="px-4 py-3 text-left">Token onboarding</th>
+                <th class="px-4 py-3 text-left">Estado</th>
+                <th class="px-4 py-3 text-left">Accion</th>
+              </tr>
+            </thead>
+            <tbody class="divide-y divide-pine/10">
+              <tr>
+                <td class="px-4 py-3 font-semibold text-pine">Patrulla Kolibri</td>
+                <td class="px-4 py-3 text-charcoal/70">d9c6e47f-8a74-4d12-9ebf-7b6b1cd4a213</td>
+                <td class="px-4 py-3"><span class="rounded-full bg-emerald-100 px-2 py-1 text-xs font-semibold text-emerald-700">Paso C</span></td>
+                <td class="px-4 py-3"><button class="rounded-full border border-pine/20 px-3 py-1 text-xs font-semibold text-pine" onclick="copyToken('d9c6e47f-8a74-4d12-9ebf-7b6b1cd4a213', this)">Copiar link</button></td>
+              </tr>
+              <tr>
+                <td class="px-4 py-3 font-semibold text-pine">Patrulla Fenix</td>
+                <td class="px-4 py-3 text-charcoal/70">1f3399a8-2977-4e5a-bfc5-c0580b95f29f</td>
+                <td class="px-4 py-3"><span class="rounded-full bg-amber-100 px-2 py-1 text-xs font-semibold text-amber-700">Paso B</span></td>
+                <td class="px-4 py-3"><button class="rounded-full border border-pine/20 px-3 py-1 text-xs font-semibold text-pine" onclick="copyToken('1f3399a8-2977-4e5a-bfc5-c0580b95f29f', this)">Copiar link</button></td>
+              </tr>
+              <tr>
+                <td class="px-4 py-3 font-semibold text-pine">Patrulla Roble</td>
+                <td class="px-4 py-3 text-charcoal/70">e034854c-a7cd-4acd-af0c-1dfdb7270972</td>
+                <td class="px-4 py-3"><span class="rounded-full bg-slate-100 px-2 py-1 text-xs font-semibold text-slate-700">Paso A</span></td>
+                <td class="px-4 py-3"><button class="rounded-full border border-pine/20 px-3 py-1 text-xs font-semibold text-pine" onclick="copyToken('e034854c-a7cd-4acd-af0c-1dfdb7270972', this)">Copiar link</button></td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        <div class="mt-4 rounded-2xl border border-amber-300 bg-amber-50 p-3 text-sm text-amber-800">
+          Consejo: comparte los enlaces solo con los lideres de patrulla para preservar el flujo de token unico.
+        </div>
+
+        <div class="mt-6 flex justify-between">
+          <button onclick="goStep(1)" class="rounded-2xl border border-pine px-5 py-3 text-sm font-semibold text-pine">Volver</button>
+          <button onclick="goStep(3)" class="rounded-2xl bg-pine px-5 py-3 text-sm font-semibold text-white">Guardar y seguir</button>
+        </div>
+      </article>
+
+      <article id="step-3" class="step-card rounded-[2rem] border border-pine/10 bg-white p-6 shadow-card">
+        <h2 class="text-xl font-semibold text-pine">Paso 4: Activacion final</h2>
+        <p class="mt-1 text-sm text-charcoal/70">Revisa checklist y habilita el dashboard operativo.</p>
+
+        <div class="mt-4 grid gap-4 md:grid-cols-2">
+          <section class="rounded-2xl bg-fog p-4">
+            <p class="text-xs uppercase tracking-[0.24em] text-moss">Checklist tecnico</p>
+            <ul class="mt-3 space-y-2 text-sm text-charcoal/80" id="checklist">
+              <li class="checklist-item flex items-center gap-3 cursor-pointer select-none" onclick="toggleCheck(this)">
+                <span class="check-box flex h-5 w-5 shrink-0 items-center justify-center rounded-full border-2 border-pine/30 text-xs transition-all"></span>
+                Perfil del lider completo
+              </li>
+              <li class="checklist-item flex items-center gap-3 cursor-pointer select-none" onclick="toggleCheck(this)">
+                <span class="check-box flex h-5 w-5 shrink-0 items-center justify-center rounded-full border-2 border-pine/30 text-xs transition-all"></span>
+                Evento y lenguaje configurados
+              </li>
+              <li class="checklist-item flex items-center gap-3 cursor-pointer select-none" onclick="toggleCheck(this)">
+                <span class="check-box flex h-5 w-5 shrink-0 items-center justify-center rounded-full border-2 border-pine/30 text-xs transition-all"></span>
+                Patrullas con token de onboarding
+              </li>
+              <li class="checklist-item flex items-center gap-3 cursor-pointer select-none" onclick="toggleCheck(this)">
+                <span class="check-box flex h-5 w-5 shrink-0 items-center justify-center rounded-full border-2 border-pine/30 text-xs transition-all"></span>
+                Nodo Telegram activo
+              </li>
+            </ul>
+          </section>
+          <section class="rounded-2xl bg-canvas p-4">
+            <p class="text-xs uppercase tracking-[0.24em] text-moss">Resumen rapido</p>
+            <div class="mt-3 grid gap-2 text-sm">
+              <div class="flex justify-between"><span>Patrullas creadas</span><strong class="text-pine">3</strong></div>
+              <div class="flex justify-between"><span>Onboarding en progreso</span><strong class="text-bark">2</strong></div>
+              <div class="flex justify-between"><span>Listas para operaciones</span><strong class="text-emerald-700">1</strong></div>
+            </div>
+          </section>
+        </div>
+
+        <div class="mt-5 rounded-2xl border border-dashed border-moss/30 bg-moss/10 p-4 text-sm text-pine">
+          Al activar, se habilita la vista de cobertura, revisión YouTube y emisión de certificados.
+        </div>
+
+        <div class="mt-6 flex flex-wrap justify-between gap-3">
+          <button onclick="goStep(2)" class="rounded-2xl border border-pine px-5 py-3 text-sm font-semibold text-pine">Volver</button>
+          <div class="flex gap-3">
+            <button onclick="activateFlow()" class="rounded-2xl bg-pine px-5 py-3 text-sm font-semibold text-white">Activar onboarding del lider</button>
+            <a href="leader_dashboard_preview.html" class="rounded-2xl border border-pine px-5 py-3 text-sm font-semibold text-pine">Ir al dashboard</a>
+          </div>
+        </div>
+      </article>
+
+      <article id="success" class="step-card rounded-[2rem] border border-emerald-300 bg-white p-8 text-center shadow-card">
+        <div class="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-emerald-100 text-3xl">OK</div>
+        <h2 class="mt-4 text-2xl font-semibold text-pine">Onboarding del lider completado</h2>
+        <p class="mt-2 text-sm text-charcoal/70">La cuenta lider ya puede administrar patrullas, seguimiento de nodo y certificaciones MCER.</p>
+        <div class="mt-6 flex flex-wrap justify-center gap-3">
+          <a href="leader_dashboard_preview.html" class="rounded-2xl bg-pine px-5 py-3 text-sm font-semibold text-white">Abrir dashboard del lider</a>
+          <button onclick="goStep(0)" class="rounded-2xl border border-pine px-5 py-3 text-sm font-semibold text-pine">Reiniciar demo</button>
+        </div>
+      </article>
+    </section>
+  </main>
+
+  <script>
+    // ── Toast ──────────────────────────────────────────
+    function toast(msg, type = 'success') {
+      const c = document.getElementById('toast-container');
+      const t = document.createElement('div');
+      const isOk = type === 'success';
+      t.className = 'toast pointer-events-auto flex items-center gap-3 rounded-2xl border px-4 py-3 text-sm font-medium shadow-card ' +
+        (isOk ? 'border-moss/30 bg-white text-pine' : 'border-amber-300 bg-amber-50 text-amber-800');
+      t.style.opacity = '0'; t.style.transform = 'translateY(8px)';
+      t.innerHTML = `<span>${isOk ? '✓' : '⚠'}</span><span>${msg}</span>`;
+      c.appendChild(t);
+      requestAnimationFrame(() => { t.style.opacity = '1'; t.style.transform = 'translateY(0)'; });
+      setTimeout(() => { t.style.opacity = '0'; t.style.transform = 'translateY(8px)'; setTimeout(() => t.remove(), 300); }, 3000);
+    }
+
+    // ── Progress bar ───────────────────────────────────
+    function setProgress(step) {
+      const bar = document.getElementById('step-progress');
+      if (bar) bar.style.width = ((step + 1) / 4 * 100) + '%';
+    }
+
+    // ── Step navigation ────────────────────────────────
+    function goStep(step) {
+      for (let i = 0; i < 4; i++) {
+        document.getElementById('step-' + i).classList.remove('active');
+        const c = document.getElementById('crumb-' + i);
+        if (i === step) {
+          c.className = 'rounded-full border border-pine bg-pine px-4 py-2 text-sm font-semibold text-white';
+        } else if (i < step) {
+          c.className = 'rounded-full border border-moss/30 bg-moss/10 px-4 py-2 text-sm font-semibold text-moss';
+        } else {
+          c.className = 'rounded-full border border-pine/20 bg-white px-4 py-2 text-sm font-semibold text-pine/60';
+        }
+      }
+      const success = document.getElementById('success');
+      if (success) success.classList.remove('active');
+      const target = document.getElementById('step-' + step);
+      target.style.opacity = '0'; target.style.transform = 'translateY(10px)';
+      target.classList.add('active');
+      requestAnimationFrame(() => { target.style.opacity = '1'; target.style.transform = 'translateY(0)'; });
+      setProgress(step);
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    }
+
+    // ── Toggle pill ────────────────────────────────────
+    function togglePill(el) {
+      el.classList.toggle('active');
+    }
+
+    // ── Copy token (with button feedback) ────────────────
+    function copyToken(token, btn) {
+      const link = 'https://ligilo.app/patrol/onboarding/' + token + '/step-a/';
+      const orig = btn ? btn.textContent : 'Copiar link';
+      const doCopy = () => {
+        if (btn) { btn.textContent = 'Copiado ✓'; setTimeout(() => btn.textContent = orig, 2000); }
+        toast('Link copiado al portapapeles');
+      };
+      if (navigator.clipboard) {
+        navigator.clipboard.writeText(link).then(doCopy);
+      } else {
+        doCopy();
+      }
+    }
+
+    // ── Activate flow ─────────────────────────────────
+    function activateFlow() {
+      for (let i = 0; i < 4; i++) {
+        document.getElementById('step-' + i).classList.remove('active');
+      }
+      const success = document.getElementById('success');
+      success.style.opacity = '0'; success.style.transform = 'translateY(10px)';
+      success.classList.add('active');
+      requestAnimationFrame(() => { success.style.opacity = '1'; success.style.transform = 'translateY(0)'; });
+      for (let i = 0; i < 4; i++) {
+        const c = document.getElementById('crumb-' + i);
+        c.className = 'rounded-full border border-emerald-300 bg-emerald-100 px-4 py-2 text-sm font-semibold text-emerald-700';
+      }
+      const bar = document.getElementById('step-progress');
+      if (bar) { bar.style.width = '100%'; bar.style.background = '#56704f'; }
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    }
+
+    // ── Checklist toggle ──────────────────────────────
+    function toggleCheck(li) {
+      const box = li.querySelector('.check-box');
+      const checked = !li.dataset.checked;
+      li.dataset.checked = checked ? '1' : '';
+      if (checked) {
+        box.textContent = '✓';
+        box.style.background = '#56704f';
+        box.style.borderColor = '#56704f';
+        box.style.color = 'white';
+        li.style.textDecoration = 'line-through';
+        li.style.opacity = '0.6';
+      } else {
+        box.textContent = '';
+        box.style.background = '';
+        box.style.borderColor = '';
+        box.style.color = '';
+        li.style.textDecoration = '';
+        li.style.opacity = '1';
+      }
+      // Check if all done
+      const all = document.querySelectorAll('.checklist-item');
+      const done = document.querySelectorAll('.checklist-item[data-checked="1"]');
+      if (done.length === all.length) toast('Checklist completo — listo para activar!');
+    }
+  </script>
+</body>
+</html>

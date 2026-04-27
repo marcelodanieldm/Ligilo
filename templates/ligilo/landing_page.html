@@ -1,0 +1,245 @@
+{% extends 'ligilo/base.html' %}
+
+{% block title %}Ligilo | Conecta patrullas, desbloquea aventuras{% endblock %}
+
+{% block extra_head %}
+  <style>
+    .hero-wrap {
+      position: relative;
+      overflow: hidden;
+      border: 1px solid rgba(38, 65, 60, 0.16);
+      border-radius: 2rem;
+      background:
+        radial-gradient(circle at 14% 20%, rgba(178, 104, 54, 0.22), transparent 34%),
+        radial-gradient(circle at 86% 12%, rgba(86, 112, 79, 0.22), transparent 32%),
+        linear-gradient(140deg, #f8f4ea 0%, #efe6d2 46%, #e5d8bc 100%);
+      box-shadow: 0 22px 52px rgba(38, 65, 60, 0.14);
+    }
+
+    .blob {
+      position: absolute;
+      filter: blur(2px);
+      opacity: 0.5;
+      pointer-events: none;
+      animation: floaty 9s ease-in-out infinite;
+    }
+
+    .blob-a {
+      top: -2rem;
+      right: -2rem;
+      width: 11rem;
+      height: 11rem;
+      background: radial-gradient(circle at 30% 30%, rgba(178, 104, 54, 0.56), rgba(178, 104, 54, 0));
+      animation-delay: 0.6s;
+    }
+
+    .blob-b {
+      bottom: -1.5rem;
+      left: -1rem;
+      width: 9rem;
+      height: 9rem;
+      background: radial-gradient(circle at 40% 40%, rgba(86, 112, 79, 0.52), rgba(86, 112, 79, 0));
+      animation-delay: 1.8s;
+    }
+
+    .chip {
+      border-radius: 999px;
+      border: 1px solid rgba(38, 65, 60, 0.2);
+      padding: 0.4rem 0.85rem;
+      font-size: 0.76rem;
+      font-weight: 700;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: #26413c;
+      background: rgba(248, 244, 234, 0.92);
+    }
+
+    .feature-card {
+      border-radius: 1.5rem;
+      border: 1px solid rgba(38, 65, 60, 0.1);
+      background: rgba(255, 255, 255, 0.86);
+      padding: 1.15rem;
+      box-shadow: 0 12px 28px rgba(38, 65, 60, 0.08);
+      transform: translateY(8px);
+      opacity: 0;
+      animation: reveal 0.7s ease forwards;
+    }
+
+    .feature-card:nth-child(2) {
+      animation-delay: 0.12s;
+    }
+
+    .feature-card:nth-child(3) {
+      animation-delay: 0.24s;
+    }
+
+    .feature-card:nth-child(4) {
+      animation-delay: 0.36s;
+    }
+
+    .cta-main {
+      border-radius: 1rem;
+      background: linear-gradient(135deg, #26413c 0%, #355b54 100%);
+      color: #f8f4ea;
+      transition: transform 0.2s ease, box-shadow 0.2s ease;
+      box-shadow: 0 14px 28px rgba(38, 65, 60, 0.24);
+    }
+
+    .cta-main:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 18px 34px rgba(38, 65, 60, 0.28);
+    }
+
+    .timeline-dot {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 1.7rem;
+      height: 1.7rem;
+      border-radius: 999px;
+      border: 1px solid rgba(38, 65, 60, 0.22);
+      background: #fff;
+      font-size: 0.72rem;
+      font-weight: 700;
+      color: #26413c;
+      flex-shrink: 0;
+    }
+
+    @keyframes reveal {
+      from {
+        transform: translateY(12px);
+        opacity: 0;
+      }
+      to {
+        transform: translateY(0);
+        opacity: 1;
+      }
+    }
+
+    @keyframes floaty {
+      0%, 100% {
+        transform: translateY(0px) scale(1);
+      }
+      50% {
+        transform: translateY(-7px) scale(1.04);
+      }
+    }
+  </style>
+{% endblock %}
+
+{% block body %}
+  <div class="mx-auto max-w-7xl px-4 py-8">
+    <section class="hero-wrap px-5 py-7 sm:px-8 sm:py-10 lg:px-10">
+      <span class="blob blob-a"></span>
+      <span class="blob blob-b"></span>
+
+      <div class="relative z-10 grid items-center gap-8 lg:grid-cols-[1.08fr_0.92fr]">
+        <div>
+          <div class="flex flex-wrap gap-2">
+            <span class="chip">Scout Tech</span>
+            <span class="chip">Esperanto</span>
+            <span class="chip">Poentaro Engine</span>
+          </div>
+
+          <h1 class="mt-4 text-4xl font-semibold leading-tight text-pine sm:text-5xl">
+            Haz que tu patrulla
+            <span class="text-ember">aprenda jugando</span>
+            y compita colaborando.
+          </h1>
+
+          <p class="mt-4 max-w-2xl text-base leading-7 text-charcoal/80">
+            Ligilo conecta patrullas de distintos países, activa nodos Telegram con Skolto-Instruisto y traduce actividad real en progreso MCER con insignias, certificados y retos internacionales.
+          </p>
+
+          <div class="mt-6 flex flex-wrap gap-3">
+            <a href="{% url 'dashboard:leader-onboarding' %}" class="cta-main px-5 py-3 text-sm font-semibold">
+              Empezar onboarding del líder
+            </a>
+            <a href="{% url 'dashboard:leader-dashboard' %}" class="rounded-2xl border border-pine px-5 py-3 text-sm font-semibold text-pine hover:bg-pine/5">
+              Ver dashboard del líder
+            </a>
+            <a href="{% url 'login' %}" class="rounded-2xl border border-moss bg-moss/10 px-5 py-3 text-sm font-semibold text-moss hover:bg-moss/20">
+              Iniciar sesión
+            </a>
+          </div>
+        </div>
+
+        <div class="rounded-[1.7rem] border border-pine/12 bg-white/86 p-5 shadow-card">
+          <p class="text-xs uppercase tracking-[0.24em] text-moss">Ruta rápida</p>
+          <h2 class="mt-2 text-2xl font-semibold text-pine">De cero a patrulla operativa</h2>
+
+          <ol class="mt-4 space-y-3 text-sm text-charcoal/82">
+            <li class="flex items-start gap-3">
+              <span class="timeline-dot">A</span>
+              <div>
+                <p class="font-semibold text-pine">Identidad + intereses</p>
+                <p>Define perfil de patrulla para matchmaking internacional.</p>
+              </div>
+            </li>
+            <li class="flex items-start gap-3">
+              <span class="timeline-dot">B</span>
+              <div>
+                <p class="font-semibold text-pine">Miembros (2 a 5)</p>
+                <p>Registro con validación de edad y nivel inicial percibido.</p>
+              </div>
+            </li>
+            <li class="flex items-start gap-3">
+              <span class="timeline-dot">C</span>
+              <div>
+                <p class="font-semibold text-pine">Nodo Telegram</p>
+                <p>Activación del bot y seguimiento de participación diaria.</p>
+              </div>
+            </li>
+            <li class="flex items-start gap-3">
+              <span class="timeline-dot">★</span>
+              <div>
+                <p class="font-semibold text-pine">Operaciones + certificados</p>
+                <p>Poentaro, marketplace de logros y emisión MCER con QR.</p>
+              </div>
+            </li>
+          </ol>
+        </div>
+      </div>
+    </section>
+
+    <section class="mt-8 grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+      <article class="feature-card">
+        <p class="text-xs uppercase tracking-[0.24em] text-moss">Feature 01</p>
+        <h3 class="mt-2 text-lg font-semibold text-pine">Dashboard de patrulla</h3>
+        <p class="mt-2 text-sm text-charcoal/78">Visibilidad de progreso, recomendaciones IA y desbloqueo de parches B1/B2.</p>
+      </article>
+
+      <article class="feature-card">
+        <p class="text-xs uppercase tracking-[0.24em] text-moss">Feature 02</p>
+        <h3 class="mt-2 text-lg font-semibold text-pine">Revisión YouTube 360°</h3>
+        <p class="mt-2 text-sm text-charcoal/78">Pipeline con validación metadata, auditoría y aprobación final del líder.</p>
+      </article>
+
+      <article class="feature-card">
+        <p class="text-xs uppercase tracking-[0.24em] text-moss">Feature 03</p>
+        <h3 class="mt-2 text-lg font-semibold text-pine">Onboarding del líder</h3>
+        <p class="mt-2 text-sm text-charcoal/78">Control central de tokens, avance de pasos A/B/C y cobertura del campamento.</p>
+      </article>
+
+      <article class="feature-card">
+        <p class="text-xs uppercase tracking-[0.24em] text-moss">Feature 04</p>
+        <h3 class="mt-2 text-lg font-semibold text-pine">Panel Admin operativo</h3>
+        <p class="mt-2 text-sm text-charcoal/78">KPIs globales, incidentes Rover y certificados MCER en tiempo real.</p>
+      </article>
+    </section>
+
+    <section class="mt-8 rounded-[1.6rem] border border-pine/12 bg-white/84 p-6 shadow-card">
+      <div class="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+        <div>
+          <p class="text-xs uppercase tracking-[0.24em] text-moss">Call To Action</p>
+          <h2 class="mt-1 text-2xl font-semibold text-pine">¿Listo para arrancar la Promesa Digital?</h2>
+          <p class="mt-2 text-sm text-charcoal/78">Activa hoy el flujo de onboarding y empieza a sumar puntos desde el primer mensaje.</p>
+        </div>
+        <div class="flex flex-wrap gap-3">
+          <a href="{% url 'dashboard:leader-onboarding' %}" class="cta-main px-5 py-3 text-sm font-semibold">Comenzar ahora</a>
+          <a href="{% url 'dashboard:admin-dashboard' %}" class="rounded-2xl border border-pine px-5 py-3 text-sm font-semibold text-pine hover:bg-pine/5">Ver panel admin</a>
+        </div>
+      </div>
+    </section>
+  </div>
+{% endblock %}

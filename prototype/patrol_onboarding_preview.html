@@ -1,0 +1,705 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Promesa Digital · Onboarding Preview</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          colors: {
+            pine:     '#26413c',
+            moss:     '#56704f',
+            bark:     '#6a4a3c',
+            ember:    '#b26836',
+            canvas:   '#efe6d2',
+            fog:      '#f8f4ea',
+            charcoal: '#1f2933',
+            sage:     '#c5cfb7'
+          },
+          boxShadow: { card: '0 14px 36px rgba(38,65,60,0.12)' },
+          borderRadius: { camp: '1.5rem' },
+          fontFamily: { scout: ['Iowan Old Style','Palatino Linotype','Book Antiqua','Georgia','serif'] }
+        }
+      }
+    };
+  </script>
+  <style>
+    body {
+      font-family: "Iowan Old Style","Palatino Linotype","Book Antiqua",Georgia,serif;
+      background:
+        radial-gradient(circle at top left, rgba(178,104,54,.14), transparent 24%),
+        radial-gradient(circle at bottom right, rgba(86,112,79,.12), transparent 20%),
+        linear-gradient(135deg, #f8f4ea 0%, #efe6d2 54%, #e4d6b8 100%);
+      color: #1f2933;
+      min-height: 100vh;
+    }
+    input[type=text], input[type=date], select, input[type=email] {
+      display: block;
+      width: 100%;
+      margin-top: 4px;
+      padding: 8px 12px;
+      border-radius: 12px;
+      border: 1px solid rgba(38,65,60,.18);
+      background: #f8f4ea;
+      font-size: 0.875rem;
+      color: #1f2933;
+      outline: none;
+      font-family: inherit;
+    }
+    input[type=text]:focus, input[type=date]:focus, select:focus {
+      border-color: #26413c;
+      background: #fff;
+    }
+    .step-panel { display: none; }
+    .step-panel.active { display: block; }
+    .interest-check { display: none; }
+    .interest-label {
+      cursor: pointer;
+      padding: 6px 14px;
+      border-radius: 999px;
+      border: 1px solid rgba(38,65,60,.2);
+      font-size: 0.75rem;
+      font-weight: 600;
+      color: #26413c;
+      background: #f8f4ea;
+      user-select: none;
+      transition: background .15s, color .15s;
+    }
+    .interest-check:checked + .interest-label {
+      background: #26413c;
+      color: #f8f4ea;
+      border-color: #26413c;
+    }
+    .step-panel { transition: opacity .22s ease, transform .22s ease; }
+    #toast-container .toast {
+      transition: opacity .25s ease, transform .25s ease;
+    }
+  </style>
+</head>
+<body>
+
+<!-- ─── HEADER ─── -->
+<nav class="sticky top-0 z-10 flex items-center justify-between border-b border-pine/10 bg-fog/90 px-6 py-3 backdrop-blur-sm">
+  <span class="text-sm font-semibold tracking-widest text-pine">LIGILO</span>
+  <span class="text-xs text-charcoal/60">Promesa Digital · Onboarding Patrolo</span>
+</nav>
+
+<!-- ─── TOAST CONTAINER ─── -->
+<div id="toast-container" class="fixed bottom-6 right-6 z-50 flex flex-col-reverse gap-2 items-end pointer-events-none"></div>
+
+<div class="mx-auto max-w-4xl px-4 py-8">
+
+  <!-- PROGRESS BAR -->
+  <div class="mb-6 h-1.5 w-full rounded-full bg-pine/10 overflow-hidden">
+    <div id="step-progress" class="h-full rounded-full bg-gradient-to-r from-moss to-pine transition-all duration-500 ease-out" style="width:33%"></div>
+  </div>
+
+  <!-- BREADCRUMB STEPS -->
+  <div class="mb-8 flex items-center gap-0">
+    <!-- Step A -->
+    <button onclick="goTo(0)" id="crumb-0"
+      class="flex items-center gap-2 rounded-l-full border border-pine bg-pine px-5 py-2.5 text-sm font-semibold text-white transition-all">
+      <span class="flex h-5 w-5 items-center justify-center rounded-full border border-white/40 text-xs">A</span>
+      Identidad
+    </button>
+    <span class="h-px w-6 bg-pine/30"></span>
+    <!-- Step B -->
+    <button onclick="goTo(1)" id="crumb-1"
+      class="flex items-center gap-2 border border-pine/20 bg-white/70 px-5 py-2.5 text-sm font-semibold text-pine/60 transition-all">
+      <span class="flex h-5 w-5 items-center justify-center rounded-full border border-pine/30 text-xs">B</span>
+      Miembros
+    </button>
+    <span class="h-px w-6 bg-pine/30"></span>
+    <!-- Step C -->
+    <button onclick="goTo(2)" id="crumb-2"
+      class="flex items-center gap-2 rounded-r-full border border-pine/20 bg-white/70 px-5 py-2.5 text-sm font-semibold text-pine/60 transition-all">
+      <span class="flex h-5 w-5 items-center justify-center rounded-full border border-pine/30 text-xs">C</span>
+      Nodo Telegram
+    </button>
+  </div>
+
+  <!-- ═══════════════════════════════════════════ PASO A ═══ -->
+  <div id="step-0" class="step-panel active">
+    <h1 class="text-3xl font-semibold text-pine">Promesa Digital · Paso A</h1>
+    <p class="mt-2 text-sm text-charcoal/80">
+      Define la identidad de la patrulla, el evento internacional e intereses para matchmaking.
+    </p>
+
+    <div class="mt-6 rounded-3xl border border-pine/10 bg-white p-6 shadow-card">
+      <div class="grid gap-5 md:grid-cols-2">
+
+        <div>
+          <label class="text-sm font-semibold text-pine">Nombre de Patrulla</label>
+          <input type="text" placeholder="ej. Patrulla Kolibrí" value="Patrulla Kolibrí">
+        </div>
+        <div>
+          <label class="text-sm font-semibold text-pine">Delegación</label>
+          <input type="text" placeholder="ej. Andalucía" value="Delegación Andalucía">
+        </div>
+        <div>
+          <label class="text-sm font-semibold text-pine">País (código ISO)</label>
+          <input type="text" placeholder="ej. ES" value="ES">
+        </div>
+        <div>
+          <label class="text-sm font-semibold text-pine">País</label>
+          <input type="text" placeholder="ej. España" value="España">
+        </div>
+        <div>
+          <label class="text-sm font-semibold text-pine">Idioma (código)</label>
+          <input type="text" placeholder="ej. es" value="es">
+        </div>
+        <div>
+          <label class="text-sm font-semibold text-pine">Idioma nativo</label>
+          <input type="text" placeholder="ej. Español" value="Español">
+        </div>
+        <div class="md:col-span-2">
+          <label class="text-sm font-semibold text-pine">Evento internacional</label>
+          <select>
+            <option>Jamboree Andalucía 2026</option>
+            <option>Jamboree Europa 2026</option>
+            <option>World Scout Jamboree 2027</option>
+          </select>
+        </div>
+
+        <!-- Intereses -->
+        <div class="md:col-span-2">
+          <label class="text-sm font-semibold text-pine">Intereses para matchmaking (hasta 5)</label>
+          <p class="mt-1 mb-3 text-xs text-charcoal/60">
+            Esto alimenta el algoritmo de afinidad entre patrullas. Selecciona los que mejor os representen.
+          </p>
+          <div class="flex flex-wrap gap-2">
+            <input class="interest-check" type="checkbox" id="i1" checked>
+            <label class="interest-label" for="i1">🌿 Medioambiente</label>
+
+            <input class="interest-check" type="checkbox" id="i2" checked>
+            <label class="interest-label" for="i2">🎵 Música</label>
+
+            <input class="interest-check" type="checkbox" id="i3" checked>
+            <label class="interest-label" for="i3">📖 Literatura</label>
+
+            <input class="interest-check" type="checkbox" id="i4">
+            <label class="interest-label" for="i4">🏕 Aventura al aire libre</label>
+
+            <input class="interest-check" type="checkbox" id="i5">
+            <label class="interest-label" for="i5">🤝 Servicio comunitario</label>
+
+            <input class="interest-check" type="checkbox" id="i6">
+            <label class="interest-label" for="i6">🎨 Arte y manualidades</label>
+
+            <input class="interest-check" type="checkbox" id="i7">
+            <label class="interest-label" for="i7">🔭 Ciencia y tecnología</label>
+
+            <input class="interest-check" type="checkbox" id="i8">
+            <label class="interest-label" for="i8">🌍 Lenguas y culturas</label>
+
+            <input class="interest-check" type="checkbox" id="i9">
+            <label class="interest-label" for="i9">⚽ Deportes</label>
+
+            <input class="interest-check" type="checkbox" id="i10">
+            <label class="interest-label" for="i10">🍳 Gastronomía</label>
+          </div>
+          <div class="mt-2 flex items-center gap-3">
+            <p class="text-xs text-amber-700 hidden" id="interests-warning">Máximo 5 intereses seleccionados.</p>
+            <p class="text-xs text-charcoal/50" id="interests-counter">3 / 5 seleccionados</p>
+          </div>
+        </div>
+
+      </div>
+
+      <!-- Alerta de validación demo -->
+      <div class="mt-5 rounded-2xl border border-dashed border-pine/20 bg-fog p-3 text-xs text-charcoal/60">
+        <strong class="text-pine">Nota técnica:</strong> En producción este formulario se sirve vía token UUID único enviado al líder por Telegram. El campo <code>onboarding_step</code> de <code>Patrol</code> avanza de 0 → 1 al guardar.
+      </div>
+
+      <div class="mt-6 flex justify-end">
+        <button onclick="goTo(1)"
+          class="rounded-2xl bg-pine px-6 py-3 text-sm font-semibold text-white hover:bg-moss transition-colors">
+          Guardar y continuar →
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══════════════════════════════════════════ PASO B ═══ -->
+  <div id="step-1" class="step-panel">
+    <h1 class="text-3xl font-semibold text-pine">Promesa Digital · Paso B</h1>
+    <p class="mt-2 text-sm text-charcoal/80">
+      Registra de 2 a 5 miembros. Todos deben tener entre 11 y 25 años. Las filas vacías se ignoran.
+    </p>
+
+    <div class="mt-6 rounded-3xl border border-pine/10 bg-white p-6 shadow-card">
+
+      <div class="space-y-4" id="members-list">
+
+        <!-- Miembro 1 -->
+        <div class="rounded-2xl border border-pine/10 bg-fog p-4">
+          <div class="flex items-center justify-between mb-3">
+            <h3 class="text-sm font-semibold text-pine">Miembro 1 <span class="text-moss text-xs">(requerido)</span></h3>
+            <span class="rounded-full bg-moss/10 px-2 py-0.5 text-xs text-moss">Unido ✓</span>
+          </div>
+          <div class="grid gap-3 md:grid-cols-5">
+            <div>
+              <label class="text-xs text-charcoal/60">Nombre completo</label>
+              <input type="text" value="Elena García Ruiz">
+            </div>
+            <div>
+              <label class="text-xs text-charcoal/60">Alias</label>
+              <input type="text" value="Elena">
+            </div>
+            <div>
+              <label class="text-xs text-charcoal/60">Género</label>
+              <select>
+                <option>F · Femenino</option>
+                <option>M · Masculino</option>
+                <option>X · No binario</option>
+                <option>P · Prefiero no decir</option>
+              </select>
+            </div>
+            <div>
+              <label class="text-xs text-charcoal/60">Fecha de nacimiento</label>
+              <input type="date" value="2010-03-14">
+            </div>
+            <div>
+              <label class="text-xs text-charcoal/60">Nivel inicial</label>
+              <select>
+                <option>A1</option>
+                <option selected>A2</option>
+                <option>B1</option>
+                <option>B2</option>
+              </select>
+            </div>
+          </div>
+        </div>
+
+        <!-- Miembro 2 -->
+        <div class="rounded-2xl border border-pine/10 bg-fog p-4">
+          <div class="flex items-center justify-between mb-3">
+            <h3 class="text-sm font-semibold text-pine">Miembro 2 <span class="text-moss text-xs">(requerido)</span></h3>
+            <span class="rounded-full bg-moss/10 px-2 py-0.5 text-xs text-moss">Unido ✓</span>
+          </div>
+          <div class="grid gap-3 md:grid-cols-5">
+            <div>
+              <label class="text-xs text-charcoal/60">Nombre completo</label>
+              <input type="text" value="Marcos Ruiz Díaz">
+            </div>
+            <div>
+              <label class="text-xs text-charcoal/60">Alias</label>
+              <input type="text" value="Marko">
+            </div>
+            <div>
+              <label class="text-xs text-charcoal/60">Género</label>
+              <select>
+                <option>F · Femenino</option>
+                <option selected>M · Masculino</option>
+                <option>X · No binario</option>
+                <option>P · Prefiero no decir</option>
+              </select>
+            </div>
+            <div>
+              <label class="text-xs text-charcoal/60">Fecha de nacimiento</label>
+              <input type="date" value="2009-07-22">
+            </div>
+            <div>
+              <label class="text-xs text-charcoal/60">Nivel inicial</label>
+              <select>
+                <option selected>A1</option>
+                <option>A2</option>
+                <option>B1</option>
+                <option>B2</option>
+              </select>
+            </div>
+          </div>
+        </div>
+
+        <!-- Miembro 3 -->
+        <div class="rounded-2xl border border-pine/10 bg-fog p-4">
+          <div class="flex items-center justify-between mb-3">
+            <h3 class="text-sm font-semibold text-pine">Miembro 3</h3>
+            <span class="rounded-full bg-moss/10 px-2 py-0.5 text-xs text-moss">Unida ✓</span>
+          </div>
+          <div class="grid gap-3 md:grid-cols-5">
+            <div>
+              <label class="text-xs text-charcoal/60">Nombre completo</label>
+              <input type="text" value="Sofía Lara Vega">
+            </div>
+            <div>
+              <label class="text-xs text-charcoal/60">Alias</label>
+              <input type="text" value="Sofia">
+            </div>
+            <div>
+              <label class="text-xs text-charcoal/60">Género</label>
+              <select>
+                <option selected>F · Femenino</option>
+                <option>M · Masculino</option>
+                <option>X · No binario</option>
+                <option>P · Prefiero no decir</option>
+              </select>
+            </div>
+            <div>
+              <label class="text-xs text-charcoal/60">Fecha de nacimiento</label>
+              <input type="date" value="2011-11-05">
+            </div>
+            <div>
+              <label class="text-xs text-charcoal/60">Nivel inicial</label>
+              <select>
+                <option selected>A1</option>
+                <option>A2</option>
+                <option>B1</option>
+                <option>B2</option>
+              </select>
+            </div>
+          </div>
+        </div>
+
+        <!-- Miembro 4 -->
+        <div class="rounded-2xl border border-pine/10 bg-fog p-4">
+          <div class="flex items-center justify-between mb-3">
+            <h3 class="text-sm font-semibold text-pine">Miembro 4</h3>
+            <span class="rounded-full bg-amber-100 px-2 py-0.5 text-xs text-amber-700">Pendiente</span>
+          </div>
+          <div class="grid gap-3 md:grid-cols-5">
+            <div>
+              <label class="text-xs text-charcoal/60">Nombre completo</label>
+              <input type="text" value="Amir Hassan Al-Farsi">
+            </div>
+            <div>
+              <label class="text-xs text-charcoal/60">Alias</label>
+              <input type="text" value="Amir">
+            </div>
+            <div>
+              <label class="text-xs text-charcoal/60">Género</label>
+              <select>
+                <option>F · Femenino</option>
+                <option selected>M · Masculino</option>
+                <option>X · No binario</option>
+                <option>P · Prefiero no decir</option>
+              </select>
+            </div>
+            <div>
+              <label class="text-xs text-charcoal/60">Fecha de nacimiento</label>
+              <input type="date" value="2010-05-18">
+            </div>
+            <div>
+              <label class="text-xs text-charcoal/60">Nivel inicial</label>
+              <select>
+                <option selected>A1</option>
+                <option>A2</option>
+                <option>B1</option>
+                <option>B2</option>
+              </select>
+            </div>
+          </div>
+        </div>
+
+        <!-- Miembro 5 (vacío) -->
+        <div class="rounded-2xl border border-dashed border-pine/15 bg-white/60 p-4 opacity-60">
+          <h3 class="text-sm font-semibold text-pine/60">Miembro 5 <span class="text-xs font-normal">(opcional)</span></h3>
+          <div class="grid gap-3 mt-3 md:grid-cols-5">
+            <div><label class="text-xs text-charcoal/50">Nombre completo</label><input type="text" placeholder="—"></div>
+            <div><label class="text-xs text-charcoal/50">Alias</label><input type="text" placeholder="—"></div>
+            <div>
+              <label class="text-xs text-charcoal/50">Género</label>
+              <select><option>— seleccionar —</option><option>F · Femenino</option><option>M · Masculino</option></select>
+            </div>
+            <div><label class="text-xs text-charcoal/50">Fecha de nacimiento</label><input type="date"></div>
+            <div>
+              <label class="text-xs text-charcoal/50">Nivel inicial</label>
+              <select><option>A1</option><option>A2</option><option>B1</option><option>B2</option></select>
+            </div>
+          </div>
+        </div>
+
+      </div>
+
+      <!-- Regla de validación -->
+      <div class="mt-5 rounded-2xl border border-dashed border-pine/20 bg-fog p-3 text-xs text-charcoal/60">
+        <strong class="text-pine">Validación:</strong> Se requieren mínimo 2 filas completas. La edad debe estar entre 11 y 25 años. El campo <code>telegram_user_id</code> se vincula cuando el miembro ejecuta <code>/start</code> en el nodo.
+      </div>
+
+      <div class="mt-6 flex justify-between">
+        <button onclick="goTo(0)"
+          class="rounded-2xl border border-pine px-5 py-3 text-sm font-semibold text-pine hover:bg-pine/5 transition-colors">
+          ← Volver
+        </button>
+        <button onclick="goTo(2)"
+          class="rounded-2xl bg-pine px-6 py-3 text-sm font-semibold text-white hover:bg-moss transition-colors">
+          Guardar miembros →
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══════════════════════════════════════════ PASO C ═══ -->
+  <div id="step-2" class="step-panel">
+    <h1 class="text-3xl font-semibold text-pine">Promesa Digital · Paso C</h1>
+    <p class="mt-2 text-sm text-charcoal/80">
+      Activa el nodo compartido de Telegram para iniciar el Skolto-Instruisto.
+    </p>
+
+    <div class="mt-6 rounded-3xl border border-pine/10 bg-white p-6 shadow-card">
+
+      <!-- Enlace del nodo -->
+      <h2 class="text-lg font-semibold text-pine">Link único del nodo</h2>
+      <p class="mt-2 text-sm text-charcoal/70">
+        Comparte este enlace con la patrulla local y patrullas hermanas (máximo 3 patrullas · 15 personas + bot).
+      </p>
+      <div class="mt-3 flex items-center gap-3">
+        <a href="#"
+           class="flex-1 break-all rounded-2xl bg-fog px-4 py-3 text-sm text-pine hover:bg-canvas transition-colors border border-pine/10">
+          https://t.me/LigiloBot?startgroup=ligilo_a4f9c2e1b73d
+        </a>
+        <button onclick="copyLink()"
+          class="shrink-0 rounded-2xl border border-pine/20 px-4 py-3 text-xs font-semibold text-pine hover:bg-pine/5" title="Copiar enlace">
+          Copiar
+        </button>
+      </div>
+      <p class="mt-2 text-xs text-charcoal/50">Token del nodo: <code class="rounded bg-canvas px-1 py-0.5">a4f9c2e1-b73d-4c20-8f1a-9e3d7b2c5a80</code></p>
+
+      <!-- Contadores -->
+      <div class="mt-6 grid gap-4 md:grid-cols-3">
+        <div class="rounded-2xl bg-canvas p-4">
+          <p class="text-xs uppercase tracking-[0.2em] text-moss">Miembros registrados</p>
+          <p class="mt-1 text-3xl font-semibold text-pine">4</p>
+        </div>
+        <div class="rounded-2xl bg-canvas p-4">
+          <p class="text-xs uppercase tracking-[0.2em] text-moss">Unidos al nodo</p>
+          <p class="mt-1 text-3xl font-semibold text-pine">3</p>
+        </div>
+        <div class="rounded-2xl bg-amber-50 border border-amber-200 p-4">
+          <p class="text-xs uppercase tracking-[0.2em] text-amber-700">Pendientes</p>
+          <p class="mt-1 text-3xl font-semibold text-amber-700">1</p>
+          <p class="mt-1 text-xs text-amber-600">Amir Hassan</p>
+        </div>
+      </div>
+
+      <!-- Estado de miembros -->
+      <div class="mt-5">
+        <p class="text-xs uppercase tracking-widest text-charcoal/50 mb-3">Estado de cada miembro</p>
+        <ul class="space-y-2 text-sm">
+          <li class="flex items-center justify-between rounded-2xl bg-fog px-4 py-3">
+            <span class="text-pine font-medium">Elena García · <span class="text-charcoal/60 font-normal">@ElenaScout</span></span>
+            <span class="rounded-full bg-moss/10 px-3 py-1 text-xs font-semibold text-moss">Unida ✓</span>
+          </li>
+          <li class="flex items-center justify-between rounded-2xl bg-fog px-4 py-3">
+            <span class="text-pine font-medium">Marcos Ruiz · <span class="text-charcoal/60 font-normal">@MarkoScout</span></span>
+            <span class="rounded-full bg-moss/10 px-3 py-1 text-xs font-semibold text-moss">Unido ✓</span>
+          </li>
+          <li class="flex items-center justify-between rounded-2xl bg-fog px-4 py-3">
+            <span class="text-pine font-medium">Sofía Lara · <span class="text-charcoal/60 font-normal">@SofiaScout</span></span>
+            <span class="rounded-full bg-moss/10 px-3 py-1 text-xs font-semibold text-moss">Unida ✓</span>
+          </li>
+          <li class="flex items-center justify-between rounded-2xl bg-amber-50 border border-amber-200 px-4 py-3">
+            <span class="text-pine font-medium">Amir Hassan · <span class="text-charcoal/60 font-normal">sin vincular</span></span>
+            <span class="rounded-full bg-amber-100 px-3 py-1 text-xs font-semibold text-amber-700">Pendiente</span>
+          </li>
+        </ul>
+      </div>
+
+      <!-- Alerta de estado -->
+      <div class="mt-5 rounded-2xl border border-amber-300 bg-amber-50 p-4 text-sm text-amber-800">
+        <p class="font-semibold">⏳ Falta 1 miembro por unirse</p>
+        <p class="mt-1">
+          El botón de activación estará disponible cuando todos los miembros se unan al nodo o el líder lo fuerce manualmente.
+          El miembro debe ejecutar <code>/start</code> en
+          <a href="#" class="underline">t.me/LigiloBot</a> para vincularse automáticamente.
+        </p>
+      </div>
+
+      <!-- Nota técnica -->
+      <div class="mt-4 rounded-2xl border border-dashed border-pine/20 bg-fog p-3 text-xs text-charcoal/60">
+        <strong class="text-pine">Nota técnica:</strong> Al activar, <code>telegram_node_active = True</code> y <code>onboarding_completed_at</code> se registran en el modelo <code>Patrol</code>. Skolto-Instruisto empieza a procesar mensajes del grupo vía webhook.
+      </div>
+
+      <div class="mt-6 flex flex-wrap items-center justify-between gap-3">
+        <button onclick="goTo(1)"
+          class="rounded-2xl border border-pine px-5 py-3 text-sm font-semibold text-pine hover:bg-pine/5 transition-colors">
+          ← Volver
+        </button>
+        <div class="flex gap-3">
+          <button onclick="forceActivate()"
+            class="rounded-2xl border border-amber-400 bg-amber-50 px-5 py-3 text-sm font-semibold text-amber-800 hover:bg-amber-100 transition-colors">
+            Activar igualmente (forzar)
+          </button>
+          <button disabled
+            class="rounded-2xl bg-pine/40 px-6 py-3 text-sm font-semibold text-white cursor-not-allowed" id="activate-btn">
+            Activar nodo 🔒
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══════════════════════════════════════════ ÉXITO ═══ -->
+  <div id="step-3" class="step-panel">
+    <div class="mt-8 rounded-3xl border border-moss/20 bg-white p-8 shadow-card text-center">
+      <div class="mx-auto flex h-20 w-20 items-center justify-center rounded-full bg-moss/10 text-4xl">🌲</div>
+      <h1 class="mt-5 text-3xl font-semibold text-pine">¡Nodo activado!</h1>
+      <p class="mt-3 text-sm text-charcoal/70 max-w-md mx-auto">
+        La Patrulla Kolibrí ya forma parte de la red Ligilo. Skolto-Instruisto comenzará a acompañar cada mensaje en Esperanto desde este momento.
+      </p>
+      <div class="mt-6 grid gap-3 sm:grid-cols-3 max-w-lg mx-auto text-left">
+        <div class="rounded-2xl bg-canvas p-4 text-center">
+          <p class="text-xs uppercase tracking-widest text-moss">Nivel MCER</p>
+          <p class="mt-1 text-2xl font-bold text-pine">A1</p>
+        </div>
+        <div class="rounded-2xl bg-canvas p-4 text-center">
+          <p class="text-xs uppercase tracking-widest text-moss">Miembros</p>
+          <p class="mt-1 text-2xl font-bold text-pine">4</p>
+        </div>
+        <div class="rounded-2xl bg-canvas p-4 text-center">
+          <p class="text-xs uppercase tracking-widest text-moss">Poentaro</p>
+          <p class="mt-1 text-2xl font-bold text-pine">0 pts</p>
+        </div>
+      </div>
+      <div class="mt-8 flex flex-wrap justify-center gap-3">
+        <a href="patrol_dashboard_preview.html"
+          class="rounded-2xl bg-pine px-6 py-3 text-sm font-semibold text-white hover:bg-moss transition-colors">
+          Ir al Dashboard →
+        </a>
+        <button onclick="goTo(0)"
+          class="rounded-2xl border border-pine/20 px-6 py-3 text-sm font-semibold text-pine hover:bg-pine/5 transition-colors">
+          Reiniciar demo
+        </button>
+      </div>
+    </div>
+  </div>
+
+</div><!-- /page -->
+
+<script>
+  // ── Toast ──────────────────────────────────────────────
+  function toast(msg, type = 'success') {
+    const c = document.getElementById('toast-container');
+    const t = document.createElement('div');
+    const isOk = type === 'success';
+    t.className = 'toast pointer-events-auto flex items-center gap-3 rounded-2xl border px-4 py-3 text-sm font-medium shadow-card opacity-0 translate-y-2 ' +
+      (isOk ? 'border-moss/30 bg-white text-pine' : 'border-amber-300 bg-amber-50 text-amber-800');
+    t.innerHTML = `<span class="text-base">${isOk ? '✓' : '⚠'}</span><span>${msg}</span>`;
+    c.appendChild(t);
+    requestAnimationFrame(() => t.classList.replace('opacity-0','opacity-100') || (t.style.opacity='1', t.style.transform='translateY(0)'));
+    t.style.transition = 'opacity .25s ease, transform .25s ease';
+    requestAnimationFrame(() => { t.style.opacity = '1'; t.style.transform = 'translateY(0)'; });
+    setTimeout(() => { t.style.opacity = '0'; t.style.transform = 'translateY(8px)'; setTimeout(() => t.remove(), 300); }, 3000);
+  }
+
+  // ── Progress bar ───────────────────────────────────────
+  const TOTAL_STEPS = 4;
+  function setProgress(step) {
+    const bar = document.getElementById('step-progress');
+    if (bar) bar.style.width = ((step + 1) / TOTAL_STEPS * 100) + '%';
+  }
+
+  // ── Step navigation ────────────────────────────────────
+  function goTo(step) {
+    for (let i = 0; i < TOTAL_STEPS; i++) {
+      const el = document.getElementById('step-'+i);
+      if (el) el.classList.remove('active');
+    }
+    const target = document.getElementById('step-'+step);
+    if (target) {
+      target.style.opacity = '0';
+      target.style.transform = 'translateY(10px)';
+      target.classList.add('active');
+      requestAnimationFrame(() => {
+        target.style.transition = 'opacity .22s ease, transform .22s ease';
+        target.style.opacity = '1';
+        target.style.transform = 'translateY(0)';
+      });
+    }
+    // breadcrumb coloring
+    for (let i = 0; i < 3; i++) {
+      const btn = document.getElementById('crumb-'+i);
+      if (!btn) continue;
+      btn.className = btn.className
+        .replace(/bg-\S+/g,'').replace(/text-\S+/g,'').replace(/border-\S+/g,'').trim();
+      const base = 'flex items-center gap-2 px-5 py-2.5 text-sm font-semibold border transition-all ';
+      const round = i === 0 ? 'rounded-l-full ' : i === 2 ? 'rounded-r-full ' : '';
+      if (i < step)        btn.className = base + round + 'bg-moss/10 text-moss border-moss/30';
+      else if (i === step) btn.className = base + round + 'bg-pine text-white border-pine';
+      else                 btn.className = base + round + 'bg-white/70 text-pine/60 border-pine/20';
+    }
+    setProgress(step);
+    window.scrollTo({top: 0, behavior: 'smooth'});
+  }
+
+  // ── Copy link (Paso C) ─────────────────────────────────
+  function copyLink() {
+    const link = 'https://t.me/LigiloBot?startgroup=ligilo_a4f9c2e1b73d';
+    if (navigator.clipboard) {
+      navigator.clipboard.writeText(link).then(() => toast('Enlace copiado al portapapeles'));
+    } else {
+      toast('Enlace: ' + link, 'warn');
+    }
+  }
+
+  // ── Force activate ─────────────────────────────────────
+  function forceActivate() {
+    const btn = document.getElementById('activate-btn');
+    btn.disabled = false;
+    btn.className = 'rounded-2xl bg-pine px-6 py-3 text-sm font-semibold text-white hover:bg-moss transition-colors cursor-pointer';
+    btn.textContent = 'Activar nodo →';
+    btn.onclick = () => goTo(3);
+    toast('Activación forzada habilitada', 'warn');
+  }
+
+  // ── Interests: max 5 + live counter ───────────────────
+  function syncInterests() {
+    const checked = document.querySelectorAll('.interest-check:checked');
+    const warn    = document.getElementById('interests-warning');
+    const counter = document.getElementById('interests-counter');
+    if (counter) {
+      counter.textContent = `${checked.length} / 5 seleccionados`;
+      counter.className = checked.length >= 5
+        ? 'text-xs font-semibold text-bark'
+        : 'text-xs text-charcoal/50';
+    }
+    if (checked.length > 5) {
+      document.querySelectorAll('.interest-check').forEach(cb => {
+        if (!cb.checked) { cb.checked = false; }
+      });
+      warn.classList.remove('hidden');
+    } else {
+      warn.classList.add('hidden');
+    }
+  }
+  document.querySelectorAll('.interest-check').forEach(cb => {
+    cb.addEventListener('change', e => {
+      const checked = document.querySelectorAll('.interest-check:checked');
+      if (checked.length > 5) {
+        e.target.checked = false;
+        toast('Máximo 5 intereses permitidos', 'warn');
+      }
+      syncInterests();
+    });
+  });
+  syncInterests();
+
+  // ── Live age display on date inputs ──────────────────
+  document.querySelectorAll('#step-1 input[type=date]').forEach(input => {
+    const badge = document.createElement('span');
+    badge.style.display = 'inline-block';
+    badge.style.marginTop = '4px';
+    badge.style.fontSize = '0.7rem';
+    input.insertAdjacentElement('afterend', badge);
+    function calcAge() {
+      if (!input.value) { badge.textContent = ''; return; }
+      const dob = new Date(input.value);
+      const age = Math.floor((Date.now() - dob) / (365.25 * 24 * 3600 * 1000));
+      if (age >= 11 && age <= 25) {
+        badge.textContent = `${age} años ✓`;
+        badge.style.color = '#56704f';
+      } else {
+        badge.textContent = `${age} años — fuera de rango (11-25)`;
+        badge.style.color = '#b26836';
+      }
+    }
+    input.addEventListener('change', calcAge);
+    if (input.value) calcAge();
+  });
+</script>
+
+</body>
+</html>

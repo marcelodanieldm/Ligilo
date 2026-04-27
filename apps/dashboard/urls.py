@@ -1,8 +1,11 @@
 from django.urls import path
 
 from apps.dashboard.views import (
+    admin_operations_dashboard,
     download_patrol_certificate,
+    landing_page,
     leader_dashboard,
+    leader_onboarding,
     patrol_onboarding_step_a,
     patrol_onboarding_step_b,
     patrol_onboarding_step_c,
@@ -18,7 +21,10 @@ from apps.dashboard.views import (
 app_name = "dashboard"
 
 urlpatterns = [
+    path("landing/", landing_page, name="landing-page"),
     path("", leader_dashboard, name="leader-dashboard"),
+    path("ops/admin-dashboard/", admin_operations_dashboard, name="admin-dashboard"),
+    path("leader/onboarding/", leader_onboarding, name="leader-onboarding"),
     path(
         "patrol/onboarding/<uuid:token>/step-a/",
         patrol_onboarding_step_a,

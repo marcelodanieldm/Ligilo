@@ -1,0 +1,195 @@
+{% extends 'ligilo/base.html' %}
+
+{% block title %}Ligilo | Admin Dashboard{% endblock %}
+
+{% block body %}
+  <div class="mx-auto max-w-7xl px-4 py-8">
+    <header class="rounded-[2rem] border border-pine/10 bg-white/85 p-6 shadow-card">
+      <div class="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+        <div>
+          <p class="text-xs uppercase tracking-[0.28em] text-moss">Control operativo</p>
+          <h1 class="mt-2 text-3xl font-semibold text-pine">Dashboard de administracion</h1>
+          <p class="mt-2 text-sm text-charcoal/80">Vista consolidada para onboarding, moderacion, incidentes y certificaciones MCER.</p>
+          <p class="mt-1 text-xs text-charcoal/60">Administrador: {{ admin_name }} · Generado: {{ generated_at|date:'d/m/Y H:i' }}</p>
+        </div>
+
+        <div class="flex flex-wrap gap-2">
+          <a href="{% url 'dashboard:leader-dashboard' %}" class="rounded-full border border-pine px-4 py-2 text-sm font-semibold text-pine">Ir a dashboard lider</a>
+          <a href="{% url 'dashboard:leader-onboarding' %}" class="rounded-full border border-moss bg-moss/10 px-4 py-2 text-sm font-semibold text-moss">Onboarding lider</a>
+        </div>
+      </div>
+    </header>
+
+    <section class="mt-6 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+      <article class="rounded-camp border border-pine/10 bg-white p-4 shadow-card">
+        <p class="text-xs uppercase tracking-[0.2em] text-moss">Usuarios</p>
+        <p class="mt-2 text-3xl font-semibold text-pine">{{ kpis.users_total }}</p>
+        <p class="mt-1 text-sm text-charcoal/70">Cuentas registradas</p>
+      </article>
+      <article class="rounded-camp border border-pine/10 bg-white p-4 shadow-card">
+        <p class="text-xs uppercase tracking-[0.2em] text-moss">Eventos activos</p>
+        <p class="mt-2 text-3xl font-semibold text-pine">{{ kpis.events_active }}</p>
+        <p class="mt-1 text-sm text-charcoal/70">Eventos en curso</p>
+      </article>
+      <article class="rounded-camp border border-pine/10 bg-white p-4 shadow-card">
+        <p class="text-xs uppercase tracking-[0.2em] text-moss">Patrullas</p>
+        <p class="mt-2 text-3xl font-semibold text-pine">{{ kpis.patrols_active }} / {{ kpis.patrols_total }}</p>
+        <p class="mt-1 text-sm text-charcoal/70">Activas sobre total</p>
+      </article>
+      <article class="rounded-camp border border-pine/10 bg-white p-4 shadow-card">
+        <p class="text-xs uppercase tracking-[0.2em] text-moss">Onboarding pendiente</p>
+        <p class="mt-2 text-3xl font-semibold text-bark">{{ kpis.onboarding_pending }}</p>
+        <p class="mt-1 text-sm text-charcoal/70">Patrullas sin paso C</p>
+      </article>
+    </section>
+
+    <section class="mt-4 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+      <article class="rounded-camp border border-pine/10 bg-white p-4 shadow-card">
+        <p class="text-xs uppercase tracking-[0.2em] text-moss">YouTube por revisar</p>
+        <p class="mt-2 text-3xl font-semibold text-bark">{{ kpis.youtube_pending }}</p>
+        <p class="mt-1 text-sm text-charcoal/70">Aprobacion final pendiente</p>
+      </article>
+      <article class="rounded-camp border border-pine/10 bg-white p-4 shadow-card">
+        <p class="text-xs uppercase tracking-[0.2em] text-moss">Incidentes abiertos</p>
+        <p class="mt-2 text-3xl font-semibold text-bark">{{ kpis.incidents_open }}</p>
+        <p class="mt-1 text-sm text-charcoal/70">Open o in_review</p>
+      </article>
+      <article class="rounded-camp border border-pine/10 bg-white p-4 shadow-card">
+        <p class="text-xs uppercase tracking-[0.2em] text-moss">Certificados emitidos</p>
+        <p class="mt-2 text-3xl font-semibold text-pine">{{ kpis.certificates_total }}</p>
+        <p class="mt-1 text-sm text-charcoal/70">Historico MCER</p>
+      </article>
+      <article class="rounded-camp border border-pine/10 bg-white p-4 shadow-card">
+        <p class="text-xs uppercase tracking-[0.2em] text-moss">Certificados 7 dias</p>
+        <p class="mt-2 text-3xl font-semibold text-pine">{{ kpis.certificates_week }}</p>
+        <p class="mt-1 text-sm text-charcoal/70">Emision semanal</p>
+      </article>
+    </section>
+
+    <section class="mt-6 grid gap-6 xl:grid-cols-2">
+      <article class="rounded-[2rem] border border-pine/10 bg-white p-5 shadow-card">
+        <h2 class="text-xl font-semibold text-pine">Onboarding en riesgo</h2>
+        <p class="mt-1 text-sm text-charcoal/70">Patrullas que aun no completan activacion de nodo.</p>
+
+        <div class="mt-4 overflow-x-auto">
+          <table class="w-full text-sm">
+            <thead>
+              <tr class="border-b border-pine/10 text-left text-xs uppercase tracking-[0.2em] text-charcoal/50">
+                <th class="pb-2 pr-4">Patrulla</th>
+                <th class="pb-2 pr-4">Paso</th>
+                <th class="pb-2 pr-4">Nodo</th>
+                <th class="pb-2">Actualizacion</th>
+              </tr>
+            </thead>
+            <tbody class="divide-y divide-pine/5">
+              {% for row in onboarding_rows %}
+                <tr>
+                  <td class="py-2 pr-4 text-pine font-semibold">{{ row.delegation }} / {{ row.name }}</td>
+                  <td class="py-2 pr-4">{{ row.step }}</td>
+                  <td class="py-2 pr-4">
+                    {% if row.node_active %}
+                      <span class="rounded-full bg-emerald-100 px-2 py-0.5 text-xs font-semibold text-emerald-700">activo</span>
+                    {% else %}
+                      <span class="rounded-full bg-amber-100 px-2 py-0.5 text-xs font-semibold text-amber-700">pendiente</span>
+                    {% endif %}
+                  </td>
+                  <td class="py-2">{{ row.updated_at|date:'d/m H:i' }}</td>
+                </tr>
+              {% empty %}
+                <tr><td class="py-3 text-charcoal/70" colspan="4">No hay onboarding pendiente.</td></tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      </article>
+
+      <article class="rounded-[2rem] border border-pine/10 bg-white p-5 shadow-card">
+        <div class="flex items-start justify-between gap-4">
+          <div>
+            <h2 class="text-xl font-semibold text-pine">Cola de YouTube review</h2>
+            <p class="mt-1 text-sm text-charcoal/70">Submissions esperando aprobacion del lider.</p>
+          </div>
+          <span class="rounded-full bg-amber-100 px-3 py-1 text-xs font-semibold text-amber-700">{{ kpis.youtube_pending }} pendientes</span>
+        </div>
+
+        <ul class="mt-4 space-y-3 text-sm">
+          {% for row in youtube_rows %}
+            <li class="rounded-camp border border-pine/10 bg-fog p-4">
+              <div class="flex flex-wrap items-center justify-between gap-2">
+                <p class="font-semibold text-pine">{{ row.patrol }}</p>
+                <span class="text-xs text-charcoal/60">{{ row.submitted_at|date:'d/m H:i' }}</span>
+              </div>
+              <p class="mt-1 text-xs text-charcoal/70">Validacion: {{ row.validation }} · Auditoria: {{ row.audit }}</p>
+              <div class="mt-2 flex flex-wrap gap-2">
+                <a href="{{ row.youtube_url }}" target="_blank" rel="noopener noreferrer" class="rounded-full border border-pine/20 px-3 py-1 text-xs font-semibold text-pine">Ver video</a>
+                <a href="{% url 'dashboard:youtube-review' row.id %}" class="rounded-full bg-pine px-3 py-1 text-xs font-semibold text-white">Revisar envio</a>
+              </div>
+            </li>
+          {% empty %}
+            <li class="rounded-camp border border-pine/10 bg-fog p-4 text-charcoal/70">No hay envios pendientes de aprobacion.</li>
+          {% endfor %}
+        </ul>
+      </article>
+    </section>
+
+    <section class="mt-6 grid gap-6 xl:grid-cols-2">
+      <article class="rounded-[2rem] border border-pine/10 bg-white p-5 shadow-card">
+        <h2 class="text-xl font-semibold text-pine">Incidentes Rover</h2>
+        <p class="mt-1 text-sm text-charcoal/70">Moderacion prioritaria abierta o en revision.</p>
+
+        <ul class="mt-4 space-y-3 text-sm">
+          {% for row in incident_rows %}
+            <li class="rounded-camp border border-pine/10 bg-fog p-4">
+              <div class="flex items-center justify-between gap-2">
+                <p class="font-semibold text-pine">{{ row.patrol }}</p>
+                <span class="rounded-full bg-amber-100 px-2 py-0.5 text-xs font-semibold text-amber-700">{{ row.status }}</span>
+              </div>
+              <p class="mt-1 text-xs text-charcoal/70">Prioridad: {{ row.priority }} · {{ row.created_at|date:'d/m H:i' }}</p>
+              <p class="mt-2 text-charcoal/80">{{ row.description|truncatechars:140 }}</p>
+            </li>
+          {% empty %}
+            <li class="rounded-camp border border-pine/10 bg-fog p-4 text-charcoal/70">Sin incidentes abiertos.</li>
+          {% endfor %}
+        </ul>
+      </article>
+
+      <article class="rounded-[2rem] border border-pine/10 bg-white p-5 shadow-card">
+        <h2 class="text-xl font-semibold text-pine">Certificados MCER recientes</h2>
+        <p class="mt-1 text-sm text-charcoal/70">Ultimas emisiones y modo preview.</p>
+
+        <div class="mt-4 overflow-x-auto">
+          <table class="w-full text-sm">
+            <thead>
+              <tr class="border-b border-pine/10 text-left text-xs uppercase tracking-[0.2em] text-charcoal/50">
+                <th class="pb-2 pr-4">Patrulla</th>
+                <th class="pb-2 pr-4">Nivel</th>
+                <th class="pb-2 pr-4">Puntos</th>
+                <th class="pb-2 pr-4">Estado</th>
+                <th class="pb-2">Fecha</th>
+              </tr>
+            </thead>
+            <tbody class="divide-y divide-pine/5">
+              {% for row in cert_rows %}
+                <tr>
+                  <td class="py-2 pr-4 text-pine font-semibold">{{ row.patrol }}</td>
+                  <td class="py-2 pr-4">{{ row.level }}</td>
+                  <td class="py-2 pr-4">{{ row.points }}</td>
+                  <td class="py-2 pr-4">
+                    {% if row.preview %}
+                      <span class="rounded-full bg-amber-100 px-2 py-0.5 text-xs font-semibold text-amber-700">preview</span>
+                    {% else %}
+                      <span class="rounded-full bg-emerald-100 px-2 py-0.5 text-xs font-semibold text-emerald-700">final</span>
+                    {% endif %}
+                  </td>
+                  <td class="py-2">{{ row.issued_at|date:'d/m H:i' }}</td>
+                </tr>
+              {% empty %}
+                <tr><td class="py-3 text-charcoal/70" colspan="5">No hay certificados emitidos.</td></tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      </article>
+    </section>
+  </div>
+{% endblock %}

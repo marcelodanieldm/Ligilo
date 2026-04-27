@@ -1,0 +1,435 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Central de Operaciones · Preview</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          colors: {
+            pine:     '#26413c',
+            moss:     '#56704f',
+            bark:     '#6a4a3c',
+            ember:    '#b26836',
+            canvas:   '#efe6d2',
+            fog:      '#f8f4ea',
+            charcoal: '#1f2933',
+            sage:     '#c5cfb7'
+          },
+          boxShadow: { card: '0 14px 36px rgba(38,65,60,0.12)' },
+          borderRadius: { camp: '1.5rem' },
+          fontFamily: { scout: ['Iowan Old Style','Palatino Linotype','Book Antiqua','Georgia','serif'] }
+        }
+      }
+    };
+  </script>
+  <style>
+    body {
+      font-family: "Iowan Old Style","Palatino Linotype","Book Antiqua",Georgia,serif;
+      background:
+        radial-gradient(circle at top left,  rgba(178,104,54,.14), transparent 24%),
+        radial-gradient(circle at bottom right, rgba(86,112,79,.12), transparent 20%),
+        linear-gradient(135deg, #f8f4ea 0%, #efe6d2 54%, #e4d6b8 100%);
+      color: #1f2933;
+      min-height: 100vh;
+    }
+    .energy-bar {
+      transition: width .6s cubic-bezier(.4,0,.2,1);
+    }
+  </style>
+</head>
+<body>
+
+<!-- ─── NAV stub ─── -->
+<nav class="sticky top-0 z-10 flex items-center justify-between border-b border-pine/10 bg-fog/80 px-6 py-3 backdrop-blur-sm">
+  <span class="text-sm font-semibold tracking-widest text-pine">LIGILO</span>
+  <div class="flex items-center gap-4 text-xs text-charcoal/60">
+    <span>Patrulla Kolibrí · Delegación Andalucía</span>
+    <span class="rounded-full border border-pine/20 px-3 py-1 text-pine">Nivel B1 🌲</span>
+  </div>
+</nav>
+
+<!-- ─── PAGE ─── -->
+<div class="mx-auto max-w-6xl px-4 py-8">
+
+  <!-- HEADER -->
+  <header class="rounded-3xl border border-pine/10 bg-white p-6 shadow-card">
+    <p class="text-xs uppercase tracking-[0.24em] text-moss">Dashboard de la Patrolo</p>
+    <h1 class="mt-2 text-3xl font-semibold text-pine">
+      La Central de Operaciones · Delegación Andalucía / Patrulla Kolibrí
+    </h1>
+    <p class="mt-2 text-sm text-charcoal/70">
+      Nodo compartido:
+      <a href="#" class="text-pine underline">
+        https://t.me/LigiloBot?startgroup=ligilo_a4f9c2e1b73d
+      </a>
+    </p>
+    <!-- step breadcrumb -->
+    <div class="mt-4 flex items-center gap-2 text-xs">
+      <span class="rounded-full bg-pine px-3 py-1 text-white">A · Identidad ✓</span>
+      <span class="h-px w-5 bg-pine/20"></span>
+      <span class="rounded-full bg-pine px-3 py-1 text-white">B · Miembros ✓</span>
+      <span class="h-px w-5 bg-pine/20"></span>
+      <span class="rounded-full bg-pine px-3 py-1 text-white">C · Nodo ✓</span>
+      <span class="h-px w-5 bg-pine/20"></span>
+      <span class="rounded-full bg-moss px-3 py-1 text-white">● Operativo</span>
+    </div>
+  </header>
+
+  <!-- ROW 1: Kondukto + Poentaro -->
+  <section class="mt-6 grid gap-6 lg:grid-cols-3">
+
+    <!-- Kondukto -->
+    <article class="rounded-3xl border border-pine/10 bg-white p-5 shadow-card">
+      <h2 class="text-lg font-semibold text-pine">Kondukto</h2>
+      <p class="mt-1 text-xs text-charcoal/50 uppercase tracking-widest">Reglas del nodo</p>
+      <ul class="mt-3 space-y-3 text-sm text-charcoal/80">
+        <li class="flex items-start gap-2">
+          <span class="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-pine/10 text-pine text-xs">1</span>
+          Interacción diaria: mínimo 3 mensajes por patrulla.
+        </li>
+        <li class="flex items-start gap-2">
+          <span class="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-pine/10 text-pine text-xs">2</span>
+          Honor Scout: la validación de pares es sagrada.
+        </li>
+        <li class="flex items-start gap-2">
+          <span class="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-pine/10 text-pine text-xs">3</span>
+          Feedback 360°: validación técnica, pares, líder y auditoría IA.
+        </li>
+      </ul>
+
+      <!-- Miembros mini-list -->
+      <div class="mt-5 border-t border-pine/10 pt-4">
+        <p class="text-xs uppercase tracking-widest text-charcoal/50">Miembros del nodo</p>
+        <ul class="mt-2 space-y-1.5 text-sm">
+          <li class="flex items-center justify-between">
+            <span class="text-charcoal/80">Elena García</span>
+            <span class="rounded-full bg-moss/10 px-2 py-0.5 text-xs text-moss">Unida ✓</span>
+          </li>
+          <li class="flex items-center justify-between">
+            <span class="text-charcoal/80">Marcos Ruiz</span>
+            <span class="rounded-full bg-moss/10 px-2 py-0.5 text-xs text-moss">Unido ✓</span>
+          </li>
+          <li class="flex items-center justify-between">
+            <span class="text-charcoal/80">Sofía Lara</span>
+            <span class="rounded-full bg-moss/10 px-2 py-0.5 text-xs text-moss">Unida ✓</span>
+          </li>
+          <li class="flex items-center justify-between">
+            <span class="text-charcoal/80">Amir Hassan</span>
+            <span class="rounded-full bg-amber-100 px-2 py-0.5 text-xs text-amber-700">Pendiente</span>
+          </li>
+        </ul>
+      </div>
+    </article>
+
+    <!-- Poentaro -->
+    <article class="rounded-3xl border border-pine/10 bg-white p-5 shadow-card lg:col-span-2">
+      <div class="flex items-start justify-between">
+        <div>
+          <h2 class="text-lg font-semibold text-pine">Poentaro</h2>
+          <p class="mt-1 text-sm text-charcoal/70">
+            Nivel actual:
+            <span class="inline-flex items-center gap-1 rounded-full bg-pine px-3 py-0.5 text-sm font-semibold text-white">
+              🌲 B1 Esploristo
+            </span>
+          </p>
+        </div>
+        <span class="text-3xl font-bold text-pine" data-countup="4250">0</span>
+      </div>
+
+      <!-- Barra de energía -->
+      <div class="mt-4">
+        <div class="flex justify-between text-xs text-charcoal/50 mb-1">
+          <span>A1</span><span>A2</span><span>B1</span><span>B2</span>
+        </div>
+        <div class="relative h-5 w-full rounded-full bg-fog overflow-hidden border border-pine/10">
+          <!-- umbrales -->
+          <div class="absolute top-0 h-full w-px bg-pine/20" style="left:16.6%"></div>
+          <div class="absolute top-0 h-full w-px bg-pine/20" style="left:50%"></div>
+          <div class="absolute top-0 h-full w-px bg-pine/20" style="left:83.3%"></div>
+          <!-- fill: 4250/6001 ≈ 71% -->
+          <div class="energy-bar h-full rounded-full bg-gradient-to-r from-moss to-pine" style="width:71%"></div>
+        </div>
+        <p class="mt-1 text-xs text-charcoal/50 text-right">71% hacia B2 · faltan 1 751 pts</p>
+      </div>
+
+      <!-- Métricas en cards -->
+      <div class="mt-5 grid gap-3 md:grid-cols-3">
+        <div class="rounded-2xl bg-canvas p-4">
+          <p class="text-xs uppercase tracking-widest text-moss">Linguo-Poentoj</p>
+          <p class="mt-1 text-2xl font-bold text-pine" data-countup="2800">0</p>
+          <p class="mt-0.5 text-xs text-charcoal/50">Texto + audio validado</p>
+        </div>
+        <div class="rounded-2xl bg-canvas p-4">
+          <p class="text-xs uppercase tracking-widest text-moss">Amikeco-Poentoj</p>
+          <p class="mt-1 text-2xl font-bold text-pine" data-countup="1120">0</p>
+          <p class="mt-0.5 text-xs text-charcoal/50">28 celebraciones × 40 pts</p>
+        </div>
+        <div class="rounded-2xl bg-canvas p-4">
+          <p class="text-xs uppercase tracking-widest text-moss">Agado-Poentoj</p>
+          <p class="mt-1 text-2xl font-bold text-pine" data-countup="330">0</p>
+          <p class="mt-0.5 text-xs text-charcoal/50">Misiones YouTube</p>
+        </div>
+      </div>
+
+      <!-- Recomendación IA -->
+      <div class="mt-4 rounded-2xl border border-dashed border-amber-400 bg-amber-50 p-3 text-sm text-amber-800">
+        <span class="font-semibold">Recomendación IA · Skolto-Instruisto:</span>
+        Muy buen nivel B1. Para ir a B2, argumenten causas y consecuencias con ejemplos reales en su próximo video.
+      </div>
+    </article>
+
+  </section>
+
+  <!-- ROW 2: Tablón + Marketplace -->
+  <section class="mt-6 grid gap-6 lg:grid-cols-2">
+
+    <!-- Tablón de Anuncios -->
+    <article class="rounded-3xl border border-pine/10 bg-white p-5 shadow-card">
+      <h2 class="text-lg font-semibold text-pine">Tablón de Anuncios</h2>
+
+      <div class="mt-3 rounded-2xl bg-fog p-4 text-sm text-charcoal/80">
+        <p class="font-semibold text-pine">Último feedback del Skolto-Instruisto</p>
+        <p class="mt-1 text-charcoal/70">
+          Lexiko: 78/100 · Gramatiko: 72/100 · Partopreno: 80/100
+        </p>
+        <p class="mt-2 italic text-charcoal/60">
+          "Tre bone! Via argumento en Esperanto jam sonas pli matura."
+        </p>
+        <p class="mt-1 text-xs text-moss">Feedback asertivo: Tu base es sólida. Refuerza tus argumentos con ejemplos concretos.</p>
+      </div>
+
+      <div class="mt-3 rounded-2xl bg-fog p-4 text-sm text-charcoal/80">
+        <p class="font-semibold text-pine">Notificación de validación</p>
+        <p class="mt-1">
+          Tu video recibió estado
+          <span class="rounded-full bg-moss/10 px-2 py-0.5 text-xs font-semibold text-moss">valid</span>,
+          auditoría
+          <span class="rounded-full bg-moss/10 px-2 py-0.5 text-xs font-semibold text-moss">passed</span>
+          y sello del líder
+          <span class="rounded-full bg-moss/10 px-2 py-0.5 text-xs font-semibold text-moss">approved</span>.
+        </p>
+      </div>
+
+      <!-- Patrulla hermana -->
+      <div class="mt-3 rounded-2xl border border-sage/40 bg-sage/10 p-4 text-sm">
+        <p class="font-semibold text-pine">Patrulla hermana</p>
+        <p class="mt-1 text-charcoal/70">Patrulla Fenix · Delegación Oporto, Portugal</p>
+        <p class="mt-1 text-xs text-charcoal/50">Enlazadas desde 14/02/2026 · Idioma puente: Esperanto</p>
+      </div>
+    </article>
+
+    <!-- Marketplace de Logros -->
+    <article class="rounded-3xl border border-pine/10 bg-white p-5 shadow-card">
+      <h2 class="text-lg font-semibold text-pine">Marketplace de Logros</h2>
+      <p class="mt-1 text-xs text-charcoal/50">Desbloquea parches físicos al cumplir los requisitos.</p>
+
+      <!-- B1 → DESBLOQUEADO -->
+      <div class="mt-4 rounded-2xl border border-moss/30 bg-moss/5 p-4">
+        <div class="flex items-start justify-between gap-3">
+          <div>
+            <p class="font-semibold text-pine">🎖 Parche B1 · Esperanto-Skolto</p>
+            <p class="mt-1 text-xs text-charcoal/60">Requisito: 3 500 pts + 4 videos 360°</p>
+            <div class="mt-1 flex gap-1 flex-wrap text-xs">
+              <span class="rounded-full bg-moss/10 px-2 py-0.5 text-moss">4 250 pts ✓</span>
+              <span class="rounded-full bg-moss/10 px-2 py-0.5 text-moss">4 videos ✓</span>
+            </div>
+          </div>
+          <span class="shrink-0 rounded-full border border-moss/30 px-3 py-1 text-xs font-semibold text-moss">Desbloqueado</span>
+        </div>
+        <a href="#"
+           class="mt-3 inline-block rounded-2xl bg-pine px-4 py-2 text-sm font-semibold text-white hover:bg-moss transition-colors">
+          Desbloquear y Pagar →
+        </a>
+      </div>
+
+      <!-- B2 → CANDADO -->
+      <div class="mt-3 rounded-2xl border border-pine/10 p-4">
+        <div class="flex items-start justify-between gap-3">
+          <div>
+            <p class="font-semibold text-pine">🏔 Parche B2 · Gvidanto</p>
+            <p class="mt-1 text-xs text-charcoal/60">Requisito: 6 000 pts + proyecto liderazgo internacional</p>
+            <div class="mt-1 flex gap-1 flex-wrap text-xs">
+              <span class="rounded-full bg-amber-100 px-2 py-0.5 text-amber-700">4 250 / 6 000 pts</span>
+              <span class="rounded-full bg-amber-100 px-2 py-0.5 text-amber-700">Proyecto pendiente</span>
+            </div>
+          </div>
+          <span class="shrink-0 text-lg">🔒</span>
+        </div>
+        <p class="mt-2 text-xs text-amber-700">
+          Candado activo: faltan 1 750 pts y validación final de liderazgo.
+        </p>
+      </div>
+
+      <!-- SEL Stelo-Meter mini -->
+      <div class="mt-4 rounded-2xl bg-canvas p-4">
+        <p class="text-xs uppercase tracking-widest text-charcoal/50">Stelo-Meter</p>
+        <div class="mt-2 flex items-center gap-3 text-sm">
+          <span class="rounded-full bg-amber-100 px-3 py-0.5 text-amber-700">🥉 Bronce · 500+</span>
+          <span class="rounded-full bg-slate-100 px-3 py-0.5 text-slate-500">🥈 Plata · 1000+</span>
+          <span class="rounded-full bg-yellow-100 px-3 py-0.5 text-yellow-700">🥇 Oro · 2000+</span>
+        </div>
+        <p class="mt-2 text-xs text-charcoal/50">Nivel actual: <strong>Plata</strong> (SEL 1 820 pts)</p>
+      </div>
+    </article>
+
+  </section>
+
+  <!-- ROW 3: Historial rápido -->
+  <section class="mt-6">
+    <article class="rounded-3xl border border-pine/10 bg-white p-5 shadow-card">
+      <h2 class="text-lg font-semibold text-pine">Últimas actividades</h2>
+      <div class="mt-3 overflow-x-auto">
+        <table class="w-full text-sm">
+          <thead>
+            <tr class="border-b border-pine/10 text-left text-xs uppercase tracking-widest text-charcoal/40">
+              <th class="pb-2 pr-4">Tipo</th>
+              <th class="pb-2 pr-4">Descripción</th>
+              <th class="pb-2 pr-4 text-right">Pts</th>
+              <th class="pb-2 text-right">Estado</th>
+            </tr>
+          </thead>
+          <tbody class="divide-y divide-pine/5">
+            <tr>
+              <td class="py-2 pr-4 text-charcoal/50">Audio</td>
+              <td class="py-2 pr-4">Mensaje de equipo validado · canción Esperanto</td>
+              <td class="py-2 pr-4 text-right font-semibold text-moss">+50</td>
+              <td class="py-2 text-right"><span class="rounded-full bg-moss/10 px-2 py-0.5 text-xs text-moss">Validado</span></td>
+            </tr>
+            <tr>
+              <td class="py-2 pr-4 text-charcoal/50">YouTube</td>
+              <td class="py-2 pr-4">Video de presentación patrulla · 2:48 min</td>
+              <td class="py-2 pr-4 text-right font-semibold text-moss">+500</td>
+              <td class="py-2 text-right"><span class="rounded-full bg-moss/10 px-2 py-0.5 text-xs text-moss">Aprobado</span></td>
+            </tr>
+            <tr>
+              <td class="py-2 pr-4 text-charcoal/50">Texto</td>
+              <td class="py-2 pr-4">Dialogo Esperanto con patrulla hermana</td>
+              <td class="py-2 pr-4 text-right font-semibold text-moss">+10</td>
+              <td class="py-2 text-right"><span class="rounded-full bg-moss/10 px-2 py-0.5 text-xs text-moss">Validado</span></td>
+            </tr>
+            <tr>
+              <td class="py-2 pr-4 text-charcoal/50">Celebración</td>
+              <td class="py-2 pr-4">Primera interacción con Patrulla Fenix</td>
+              <td class="py-2 pr-4 text-right font-semibold text-moss">+40</td>
+              <td class="py-2 text-right"><span class="rounded-full bg-moss/10 px-2 py-0.5 text-xs text-moss">Amikeco</span></td>
+            </tr>
+            <tr>
+              <td class="py-2 pr-4 text-charcoal/50">Texto</td>
+              <td class="py-2 pr-4">Mensaje incompleto · falló revisión</td>
+              <td class="py-2 pr-4 text-right font-semibold text-amber-600">+0</td>
+              <td class="py-2 text-right"><span class="rounded-full bg-amber-100 px-2 py-0.5 text-xs text-amber-700">Rechazado</span></td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </article>
+  </section>
+
+</div><!-- /page -->
+
+<!-- ── Toast container ── -->
+<div id="toast-container" class="fixed bottom-6 right-6 z-50 flex flex-col-reverse gap-2 items-end pointer-events-none"></div>
+
+<script>
+  // ── Toast ──────────────────────────────────────────────────────
+  function toast(msg, type = 'success') {
+    const c = document.getElementById('toast-container');
+    const t = document.createElement('div');
+    const isOk = type === 'success';
+    t.style.cssText = 'pointer-events:auto;display:flex;align-items:center;gap:10px;border-radius:1rem;border:1px solid;padding:10px 16px;font-size:.875rem;font-weight:500;box-shadow:0 14px 36px rgba(38,65,60,.12);transition:opacity .25s ease,transform .25s ease;opacity:0;transform:translateY(8px);font-family:inherit;';
+    t.style.borderColor = isOk ? 'rgba(86,112,79,.3)' : '#fcd34d';
+    t.style.background = isOk ? '#fff' : '#fffbeb';
+    t.style.color = isOk ? '#26413c' : '#92400e';
+    t.innerHTML = `<span>${isOk ? '✓' : '⚠'}</span><span>${msg}</span>`;
+    c.appendChild(t);
+    requestAnimationFrame(() => { t.style.opacity = '1'; t.style.transform = 'translateY(0)'; });
+    setTimeout(() => { t.style.opacity = '0'; t.style.transform = 'translateY(8px)'; setTimeout(() => t.remove(), 300); }, 3500);
+  }
+
+  // ── Count-up animation ─────────────────────────────────────────
+  function countUp(el, target, duration = 1000) {
+    const start = performance.now();
+    function step(now) {
+      const p = Math.min((now - start) / duration, 1);
+      const eased = 1 - Math.pow(1 - p, 3);
+      el.textContent = Math.round(eased * target).toLocaleString('es');
+      if (p < 1) requestAnimationFrame(step);
+    }
+    requestAnimationFrame(step);
+  }
+  document.querySelectorAll('[data-countup]').forEach(el => {
+    countUp(el, parseInt(el.dataset.countup, 10));
+  });
+
+  // ── Energy bar: animate from 0 to target on load ───────────────
+  window.addEventListener('load', () => {
+    document.querySelectorAll('.energy-bar').forEach(bar => {
+      const target = bar.style.width;
+      bar.style.width = '0%';
+      requestAnimationFrame(() => {
+        setTimeout(() => { bar.style.width = target; }, 120);
+      });
+    });
+  });
+
+  // ── Activity table: expand row on click ───────────────────────
+  document.querySelectorAll('tbody tr').forEach(row => {
+    row.style.cursor = 'pointer';
+    row.addEventListener('click', () => {
+      const wasExpanded = row.dataset.expanded;
+      // collapse any other
+      document.querySelectorAll('tbody tr[data-expanded]').forEach(r => {
+        const extra = r.nextSibling;
+        if (extra && extra.classList?.contains('row-detail')) extra.remove();
+        delete r.dataset.expanded;
+        r.style.background = '';
+      });
+      if (wasExpanded) return;
+      row.dataset.expanded = '1';
+      row.style.background = 'rgba(38,65,60,.04)';
+      const cells = row.querySelectorAll('td');
+      const tipo  = cells[0]?.textContent.trim() || '';
+      const desc  = cells[1]?.textContent.trim() || '';
+      const pts   = cells[2]?.textContent.trim() || '';
+      const detail = document.createElement('tr');
+      detail.className = 'row-detail';
+      detail.innerHTML = `<td colspan="4" style="padding:0 16px 12px;font-size:.75rem;color:#6b7280;font-style:italic;">
+        ${tipo} · ${desc} · ${pts} pts · registrado en el Poentaro Engine de Ligilo.
+      </td>`;
+      row.insertAdjacentElement('afterend', detail);
+    });
+  });
+
+  // ── "Desbloquear y Pagar" confirmation ────────────────────────
+  document.querySelector('a[href="#"]')?.addEventListener('click', e => {
+    const link = e.currentTarget;
+    if (link.textContent.includes('Desbloquear')) {
+      e.preventDefault();
+      if (link.dataset.confirmed) {
+        toast('Redirigiendo a la pasarela de pago...');
+        link.dataset.confirmed = '';
+        link.textContent = 'Desbloquear y Pagar →';
+        link.style.background = '';
+      } else {
+        link.dataset.confirmed = '1';
+        link.textContent = 'Confirmar pago →';
+        link.style.background = '#56704f';
+        toast('Haz clic de nuevo para confirmar', 'warn');
+        setTimeout(() => {
+          if (link.dataset.confirmed) {
+            link.dataset.confirmed = '';
+            link.textContent = 'Desbloquear y Pagar →';
+            link.style.background = '';
+          }
+        }, 4000);
+      }
+    }
+  });
+</script>
+
+</body>
+</html>

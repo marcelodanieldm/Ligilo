@@ -3,9 +3,10 @@ from datetime import timedelta
 from urllib.parse import urlencode
 from uuid import UUID
 
+from django.contrib.auth import get_user_model
 from django.contrib.auth.decorators import login_required
 from django.db import models
-from django.http import Http404, HttpRequest, HttpResponse, HttpResponseRedirect
+from django.http import Http404, HttpRequest, HttpResponse, HttpResponseForbidden, HttpResponseRedirect
 from django.urls import reverse
 from django.shortcuts import get_object_or_404, render
 from django.utils import timezone
@@ -28,8 +29,15 @@ from apps.scouting.services.certification import check_and_issue_certification, 
 from fastapi_app.services.telegram_manager import TelegramManager
 
 
+User = get_user_model()
+
+
 def _pdf_escape(text: str) -> str:
     return text.replace("\\", "\\\\").replace("(", "\\(").replace(")", "\\)")
+
+
+def landing_page(request: HttpRequest) -> HttpResponse:
+    return render(request, "ligilo/landing_page.html")
 
 
 def _build_simple_pdf(lines: list[str]) -> bytes:
@@ -92,6 +100,140 @@ def _build_simple_pdf(lines: list[str]) -> bytes:
 def leader_dashboard(request: HttpRequest) -> HttpResponse:
     controller = LeaderDashboardController(user=request.user)
     return render(request, "ligilo/leader_dashboard.html", controller.get_context())
+
+
+@login_required
+def leader_onboarding(request: HttpRequest) -> HttpResponse:
+    patrol_rows = (
+        Patrol.objects.select_related("event")
+        .order_by("-updated_at", "name")[:8]
+    )
+
+    onboarding_rows = []
+    for patrol in patrol_rows:
+        step_label = {
+            0: "Paso A",
+            1: "Paso B",
+            2: "Paso C",
+        }.get(patrol.onboarding_step, "Operativa")
+
+        step_a_url = ""
+        if patrol.invitation_token:
+            step_a_url = request.build_absolute_uri(
+                reverse("dashboard:patrol-onboarding-step-a", args=[patrol.invitation_token])
+            )
+
+        onboarding_rows.append(
+            {
+                "name": patrol.name,
+                "event_name": patrol.event.name,
+                "delegation": patrol.delegation_name,
+                "token": str(patrol.invitation_token) if patrol.invitation_token else "",
+                "step": step_label,
+                "step_a_url": step_a_url,
+            }
+        )
+
+    context = {
+        "leader_display_name": request.user.get_full_name() or request.user.get_username(),
+        "leader_email": request.user.email,
+        "onboarding_rows": onboarding_rows,
+    }
+    return render(request, "ligilo/leader_onboarding.html", context)
+
+
+@login_required
+def admin_operations_dashboard(request: HttpRequest) -> HttpResponse:
+    if not (request.user.is_staff or request.user.is_superuser):
+        return HttpResponseForbidden("Admin access required")
+
+    now = timezone.now()
+    last_7_days = now - timedelta(days=7)
+
+    patrols_qs = Patrol.objects.select_related("event")
+    active_patrols = patrols_qs.filter(is_active=True)
+
+    onboarding_pending_qs = patrols_qs.filter(onboarding_step__lt=3)
+    pending_youtube_qs = PatrolYouTubeSubmission.objects.select_related("patrol").filter(
+        leader_approval_status=PatrolYouTubeSubmission.LeaderApprovalStatus.PENDING
+    )
+    open_incidents_qs = RoverIncident.objects.select_related("patrol").filter(
+        status__in=[RoverIncident.Status.OPEN, RoverIncident.Status.IN_REVIEW]
+    )
+    recent_certs_qs = MCERCertificate.objects.select_related("patrol").order_by("-issued_at")[:8]
+
+    kpis = {
+        "users_total": User.objects.count(),
+        "events_active": Event.objects.filter(is_active=True).count(),
+        "patrols_total": patrols_qs.count(),
+        "patrols_active": active_patrols.count(),
+        "onboarding_pending": onboarding_pending_qs.count(),
+        "youtube_pending": pending_youtube_qs.count(),
+        "incidents_open": open_incidents_qs.count(),
+        "certificates_total": MCERCertificate.objects.count(),
+        "certificates_week": MCERCertificate.objects.filter(issued_at__gte=last_7_days).count(),
+    }
+
+    onboarding_rows = []
+    for patrol in onboarding_pending_qs.order_by("onboarding_step", "updated_at")[:8]:
+        onboarding_rows.append(
+            {
+                "name": patrol.name,
+                "delegation": patrol.delegation_name,
+                "step": patrol.onboarding_step,
+                "node_active": patrol.telegram_node_active,
+                "updated_at": patrol.updated_at,
+            }
+        )
+
+    youtube_rows = []
+    for item in pending_youtube_qs.order_by("-submitted_at")[:8]:
+        youtube_rows.append(
+            {
+                "id": item.id,
+                "patrol": item.patrol.name,
+                "youtube_url": item.youtube_url,
+                "validation": item.validation_status,
+                "audit": item.audit_status,
+                "submitted_at": item.submitted_at,
+            }
+        )
+
+    incident_rows = []
+    for incident in open_incidents_qs.order_by("-created_at")[:8]:
+        incident_rows.append(
+            {
+                "patrol": incident.patrol.name,
+                "status": incident.status,
+                "priority": incident.priority,
+                "created_at": incident.created_at,
+                "description": incident.description,
+            }
+        )
+
+    cert_rows = []
+    for cert in recent_certs_qs:
+        cert_rows.append(
+            {
+                "patrol": cert.patrol.name,
+                "level": cert.mcer_level,
+                "points": cert.points_at_issue,
+                "code": cert.certification_code,
+                "issued_at": cert.issued_at,
+                "preview": cert.is_preview_mode(),
+            }
+        )
+
+    context = {
+        "kpis": kpis,
+        "onboarding_rows": onboarding_rows,
+        "youtube_rows": youtube_rows,
+        "incident_rows": incident_rows,
+        "cert_rows": cert_rows,
+        "admin_name": request.user.get_full_name() or request.user.get_username(),
+        "generated_at": now,
+    }
+    return render(request, "ligilo/admin_dashboard.html", context)
 
 
 def _parse_uuid_or_404(raw: str) -> UUID:

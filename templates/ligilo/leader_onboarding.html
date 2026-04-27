@@ -1,0 +1,279 @@
+{% extends 'ligilo/base.html' %}
+
+{% block title %}Ligilo | Onboarding del lider{% endblock %}
+
+{% block extra_head %}
+  <style>
+    .step-card { display: none; }
+    .step-card.active { display: block; }
+
+    .field {
+      margin-top: 0.25rem;
+      width: 100%;
+      border-radius: 0.9rem;
+      border: 1px solid rgba(38, 65, 60, 0.18);
+      background: #f8f4ea;
+      padding: 0.6rem 0.8rem;
+      font-size: 0.875rem;
+      color: #1f2933;
+      outline: none;
+      font-family: inherit;
+    }
+
+    .field:focus {
+      border-color: #26413c;
+      background: #fff;
+    }
+
+    .pill {
+      border-radius: 999px;
+      border: 1px solid rgba(38, 65, 60, 0.2);
+      background: #f8f4ea;
+      padding: 0.35rem 0.75rem;
+      font-size: 0.75rem;
+      font-weight: 600;
+      color: #26413c;
+      cursor: pointer;
+      user-select: none;
+    }
+
+    .pill.active {
+      background: #26413c;
+      border-color: #26413c;
+      color: #f8f4ea;
+    }
+  </style>
+{% endblock %}
+
+{% block body %}
+  <div class="mx-auto max-w-6xl px-4 py-8">
+    <header class="rounded-[2rem] border border-pine/10 bg-white/80 p-6 shadow-card backdrop-blur">
+      <p class="text-xs uppercase tracking-[0.28em] text-moss">Arranque operativo</p>
+      <h1 class="mt-2 text-3xl font-semibold text-pine">Onboarding del lider</h1>
+      <p class="mt-2 text-sm text-charcoal/80">Configura identidad, evento y entrega de enlaces para iniciar el flujo de patrullas.</p>
+
+      <div class="mt-5 grid gap-3 md:grid-cols-4">
+        <button id="crumb-0" onclick="goStep(0)" class="rounded-full border border-pine bg-pine px-4 py-2 text-sm font-semibold text-white">1. Perfil</button>
+        <button id="crumb-1" onclick="goStep(1)" class="rounded-full border border-pine/20 bg-white px-4 py-2 text-sm font-semibold text-pine/60">2. Evento</button>
+        <button id="crumb-2" onclick="goStep(2)" class="rounded-full border border-pine/20 bg-white px-4 py-2 text-sm font-semibold text-pine/60">3. Patrullas</button>
+        <button id="crumb-3" onclick="goStep(3)" class="rounded-full border border-pine/20 bg-white px-4 py-2 text-sm font-semibold text-pine/60">4. Activacion</button>
+      </div>
+    </header>
+
+    <section class="mt-6">
+      <article id="step-0" class="step-card active rounded-[2rem] border border-pine/10 bg-white p-6 shadow-card">
+        <h2 class="text-xl font-semibold text-pine">Paso 1: Perfil del lider</h2>
+        <p class="mt-1 text-sm text-charcoal/70">Estos datos alimentan la cabecera del panel y comunicaciones operativas.</p>
+
+        <div class="mt-4 grid gap-4 md:grid-cols-2">
+          <label class="text-sm font-semibold text-pine">Nombre visible
+            <input class="field" type="text" value="{{ leader_display_name }}" />
+          </label>
+          <label class="text-sm font-semibold text-pine">Correo del lider
+            <input class="field" type="email" value="{{ leader_email|default:'-' }}" />
+          </label>
+          <label class="text-sm font-semibold text-pine">Delegacion
+            <input class="field" type="text" value="Delegacion principal" />
+          </label>
+          <label class="text-sm font-semibold text-pine">Pais
+            <input class="field" type="text" value="España" />
+          </label>
+        </div>
+
+        <div class="mt-5 rounded-2xl border border-dashed border-pine/20 bg-fog p-3 text-xs text-charcoal/60">
+          Este formulario es de guia visual. Para persistir cambios, conecta estos campos al perfil de usuario o a configuracion de delegacion.
+        </div>
+
+        <div class="mt-6 flex justify-end">
+          <button onclick="goStep(1)" class="rounded-2xl bg-pine px-5 py-3 text-sm font-semibold text-white">Continuar</button>
+        </div>
+      </article>
+
+      <article id="step-1" class="step-card rounded-[2rem] border border-pine/10 bg-white p-6 shadow-card">
+        <h2 class="text-xl font-semibold text-pine">Paso 2: Evento y reglas</h2>
+        <p class="mt-1 text-sm text-charcoal/70">Define contexto internacional y canales habilitados para Poentaro.</p>
+
+        <div class="mt-4 grid gap-4 md:grid-cols-2">
+          <label class="text-sm font-semibold text-pine">Evento internacional
+            <select class="field">
+              <option>Jamboree Andalucia 2026</option>
+              <option>Eurocamp 2026</option>
+              <option>World Scout Jamboree 2027</option>
+            </select>
+          </label>
+          <label class="text-sm font-semibold text-pine">Idioma puente
+            <select class="field">
+              <option>Esperanto</option>
+              <option>Ingles</option>
+              <option>Portugues</option>
+            </select>
+          </label>
+        </div>
+
+        <div class="mt-4">
+          <p class="text-sm font-semibold text-pine">Canales activos</p>
+          <div class="mt-2 flex flex-wrap gap-2">
+            <span class="pill active" onclick="togglePill(this)">Texto</span>
+            <span class="pill active" onclick="togglePill(this)">Audio</span>
+            <span class="pill active" onclick="togglePill(this)">YouTube</span>
+            <span class="pill" onclick="togglePill(this)">PDF</span>
+          </div>
+        </div>
+
+        <div class="mt-4 rounded-2xl bg-canvas p-4 text-sm text-charcoal/80">
+          Regla de nodo recomendada: maximo 3 patrullas por grupo, maximo 15 personas + bot.
+        </div>
+
+        <div class="mt-6 flex justify-between">
+          <button onclick="goStep(0)" class="rounded-2xl border border-pine px-5 py-3 text-sm font-semibold text-pine">Volver</button>
+          <button onclick="goStep(2)" class="rounded-2xl bg-pine px-5 py-3 text-sm font-semibold text-white">Continuar</button>
+        </div>
+      </article>
+
+      <article id="step-2" class="step-card rounded-[2rem] border border-pine/10 bg-white p-6 shadow-card">
+        <h2 class="text-xl font-semibold text-pine">Paso 3: Tokens de patrulla</h2>
+        <p class="mt-1 text-sm text-charcoal/70">Comparte el enlace de Paso A con cada lider de patrulla para iniciar onboarding.</p>
+
+        <div class="mt-4 overflow-x-auto rounded-2xl border border-pine/10">
+          <table class="w-full text-sm">
+            <thead class="bg-fog text-xs uppercase tracking-[0.2em] text-charcoal/60">
+              <tr>
+                <th class="px-4 py-3 text-left">Patrulla</th>
+                <th class="px-4 py-3 text-left">Evento</th>
+                <th class="px-4 py-3 text-left">Estado</th>
+                <th class="px-4 py-3 text-left">Token</th>
+                <th class="px-4 py-3 text-left">Accion</th>
+              </tr>
+            </thead>
+            <tbody class="divide-y divide-pine/10">
+              {% for row in onboarding_rows %}
+                <tr>
+                  <td class="px-4 py-3 font-semibold text-pine">{{ row.delegation }} / {{ row.name }}</td>
+                  <td class="px-4 py-3 text-charcoal/70">{{ row.event_name }}</td>
+                  <td class="px-4 py-3">
+                    {% if row.step == 'Operativa' %}
+                      <span class="rounded-full bg-emerald-100 px-2 py-1 text-xs font-semibold text-emerald-700">{{ row.step }}</span>
+                    {% elif row.step == 'Paso C' %}
+                      <span class="rounded-full bg-amber-100 px-2 py-1 text-xs font-semibold text-amber-700">{{ row.step }}</span>
+                    {% else %}
+                      <span class="rounded-full bg-slate-100 px-2 py-1 text-xs font-semibold text-slate-700">{{ row.step }}</span>
+                    {% endif %}
+                  </td>
+                  <td class="px-4 py-3 text-charcoal/70">{{ row.token|default:'-' }}</td>
+                  <td class="px-4 py-3">
+                    {% if row.step_a_url %}
+                      <button type="button" onclick="copyLink('{{ row.step_a_url }}')" class="rounded-full border border-pine/20 px-3 py-1 text-xs font-semibold text-pine">Copiar link</button>
+                    {% else %}
+                      <span class="text-xs text-charcoal/50">Sin token</span>
+                    {% endif %}
+                  </td>
+                </tr>
+              {% empty %}
+                <tr>
+                  <td class="px-4 py-5 text-charcoal/70" colspan="5">No hay patrullas registradas aun.</td>
+                </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+
+        <div class="mt-6 flex justify-between">
+          <button onclick="goStep(1)" class="rounded-2xl border border-pine px-5 py-3 text-sm font-semibold text-pine">Volver</button>
+          <button onclick="goStep(3)" class="rounded-2xl bg-pine px-5 py-3 text-sm font-semibold text-white">Continuar</button>
+        </div>
+      </article>
+
+      <article id="step-3" class="step-card rounded-[2rem] border border-pine/10 bg-white p-6 shadow-card">
+        <h2 class="text-xl font-semibold text-pine">Paso 4: Activacion</h2>
+        <p class="mt-1 text-sm text-charcoal/70">Con todo listo, activa y entra al dashboard operativo del lider.</p>
+
+        <div class="mt-4 grid gap-4 md:grid-cols-2">
+          <section class="rounded-2xl bg-fog p-4">
+            <p class="text-xs uppercase tracking-[0.24em] text-moss">Checklist</p>
+            <ul class="mt-3 space-y-2 text-sm text-charcoal/80">
+              <li>Perfil del lider revisado</li>
+              <li>Evento y lenguaje definidos</li>
+              <li>Tokens compartidos con patrullas</li>
+              <li>Nodo listo para activacion</li>
+            </ul>
+          </section>
+          <section class="rounded-2xl bg-canvas p-4">
+            <p class="text-xs uppercase tracking-[0.24em] text-moss">Accesos</p>
+            <div class="mt-3 flex flex-wrap gap-3">
+              <a href="{% url 'dashboard:leader-dashboard' %}" class="rounded-full bg-pine px-4 py-2 text-sm font-semibold text-white">Ir al dashboard</a>
+              <button type="button" onclick="showSuccess()" class="rounded-full border border-pine px-4 py-2 text-sm font-semibold text-pine">Marcar onboarding completo</button>
+            </div>
+          </section>
+        </div>
+
+        <div class="mt-5 rounded-2xl border border-dashed border-moss/30 bg-moss/10 p-4 text-sm text-pine">
+          Esta activacion es visual. Si deseas persistencia real, puedo conectarlo a un modelo de configuracion de lider.
+        </div>
+
+        <div class="mt-6 flex justify-start">
+          <button onclick="goStep(2)" class="rounded-2xl border border-pine px-5 py-3 text-sm font-semibold text-pine">Volver</button>
+        </div>
+      </article>
+
+      <article id="success" class="step-card rounded-[2rem] border border-emerald-300 bg-white p-8 text-center shadow-card">
+        <div class="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-emerald-100 text-3xl">OK</div>
+        <h2 class="mt-4 text-2xl font-semibold text-pine">Onboarding del lider completado</h2>
+        <p class="mt-2 text-sm text-charcoal/70">Ya puedes operar patrullas, revisar entregas y emitir certificaciones desde el panel.</p>
+        <div class="mt-6 flex flex-wrap justify-center gap-3">
+          <a href="{% url 'dashboard:leader-dashboard' %}" class="rounded-2xl bg-pine px-5 py-3 text-sm font-semibold text-white">Abrir dashboard del lider</a>
+          <button onclick="goStep(0)" class="rounded-2xl border border-pine px-5 py-3 text-sm font-semibold text-pine">Reiniciar demo</button>
+        </div>
+      </article>
+    </section>
+  </div>
+
+  <script>
+    function goStep(step) {
+      for (let i = 0; i < 4; i++) {
+        const card = document.getElementById('step-' + i);
+        if (card) card.classList.remove('active');
+        const crumb = document.getElementById('crumb-' + i);
+        if (!crumb) continue;
+
+        if (i === step) {
+          crumb.className = 'rounded-full border border-pine bg-pine px-4 py-2 text-sm font-semibold text-white';
+        } else if (i < step) {
+          crumb.className = 'rounded-full border border-moss/30 bg-moss/10 px-4 py-2 text-sm font-semibold text-moss';
+        } else {
+          crumb.className = 'rounded-full border border-pine/20 bg-white px-4 py-2 text-sm font-semibold text-pine/60';
+        }
+      }
+
+      const success = document.getElementById('success');
+      if (success) success.classList.remove('active');
+
+      const target = document.getElementById('step-' + step);
+      if (target) target.classList.add('active');
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    }
+
+    function togglePill(el) {
+      el.classList.toggle('active');
+    }
+
+    function copyLink(url) {
+      if (navigator.clipboard) {
+        navigator.clipboard.writeText(url).then(() => alert('Link copiado'));
+      } else {
+        alert(url);
+      }
+    }
+
+    function showSuccess() {
+      for (let i = 0; i < 4; i++) {
+        const card = document.getElementById('step-' + i);
+        if (card) card.classList.remove('active');
+        const crumb = document.getElementById('crumb-' + i);
+        if (!crumb) continue;
+        crumb.className = 'rounded-full border border-emerald-300 bg-emerald-100 px-4 py-2 text-sm font-semibold text-emerald-700';
+      }
+      document.getElementById('success').classList.add('active');
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    }
+  </script>
+{% endblock %}
